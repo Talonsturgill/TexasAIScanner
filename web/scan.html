@@ -1,0 +1,63 @@
+<!-- The scan form.
+     Served from the docket site at /scan/. It posts to FormSubmit, exactly as the services form
+     does, so there is no endpoint, no key and no server anywhere in this product.
+
+     THE PROMISE ON THIS PAGE IS THE CONTRACT. It says one report, to one address, and no list.
+     The routine holds every part of that: it drafts to the address typed here and nowhere else,
+     it never adds anybody to anything, and it never sends a second message. If this copy and
+     the routine ever disagree, this copy is what the requester agreed to and the routine is what
+     is wrong.
+
+     The markup is deliberately plain so the docket's site_build can wrap it in the site shell
+     without fighting a second set of styles. -->
+<section class="scan" id="scan">
+  <h1>See where AI would actually help you</h1>
+  <p class="sub">
+    Give us your website. We read what is public, and send back an honest map of where AI would
+    carry real load in your operation, where ordinary software does it cheaper, and where it has
+    no business at all. Plus what operators in your industry have already published about trying
+    the same thing.
+  </p>
+
+  <ul class="scan-what">
+    <li>Every line is sourced to a page on your own site, linked so you can check it.</li>
+    <li>The parts that say you don't need AI yet are the honest ones, and they are the point.</li>
+    <li>One report to one address. No list, no follow-up sequence, no second email.</li>
+    <li>It reads what is public. It can't see your billing system or your call volume, and it
+      says so.</li>
+  </ul>
+
+  <form class="leadform" action="{FORM_ACTION}" method="POST">
+    <input type="hidden" name="_subject" value="Texas AI Docket, bottleneck scan request">
+    <input type="hidden" name="_captcha" value="false">
+    <!-- the honeypot: a bot fills it, a person never sees it -->
+    <input type="text" name="_honey" style="display:none" tabindex="-1" autocomplete="off">
+
+    <label class="vh" for="sc-site">Your website</label>
+    <input id="sc-site" name="website" type="text" inputmode="url" required
+           placeholder="Your website (yourcompany.com)">
+
+    <label class="vh" for="sc-mail">Where to send it</label>
+    <input id="sc-mail" name="email" type="email" required
+           placeholder="Where should the report go">
+
+    <label class="vh" for="sc-book">Booking or scheduling page, if you have one</label>
+    <input id="sc-book" name="booking_url" type="text" inputmode="url"
+           placeholder="Booking or scheduling page, if you have one (optional)">
+
+    <label class="vh" for="sc-jobs">Careers page, if you have one</label>
+    <input id="sc-jobs" name="jobs_url" type="text" inputmode="url"
+           placeholder="Careers page, if you have one (optional)">
+
+    <label class="vh" for="sc-note">Anything we should know</label>
+    <textarea id="sc-note" name="message" rows="3"
+              placeholder="Anything we should know (optional)"></textarea>
+
+    <button class="cta solid" type="submit">Send it</button>
+  </form>
+
+  <p class="scan-fine">
+    A person reads every report before it goes out, so this takes a day or two rather than ninety
+    seconds. Your report is not published anywhere and is not shown to anyone else.
+  </p>
+</section>
