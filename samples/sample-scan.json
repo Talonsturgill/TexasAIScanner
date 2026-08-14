@@ -1,0 +1,102 @@
+{
+  "meta": {
+    "company": "Llano Fluid Services",
+    "domain": "example-llanofluid.com",
+    "place": "Midland",
+    "date": "2026-08-14"
+  },
+  "headline": "Two pockets where software would carry real load, and one where a person should stay",
+  "observations": [
+    {
+      "operation": "Field tickets typed twice",
+      "signal": {
+        "quote": "Crews turn in tickets at the yard and the office keys them into the billing system the next morning.",
+        "source": "https://example-llanofluid.com/how-we-work"
+      },
+      "tag": "would_help",
+      "lowest_tier": "workflow",
+      "labor_framing": "If the office keys 60 to 120 tickets a week at 3 to 5 minutes each, that is roughly 3 to 10 hours a week of retyping, on the stated assumption that a ticket takes one pass.",
+      "human_check": "The office manager approves every extracted ticket before it reaches billing, the same review that happens now."
+    },
+    {
+      "operation": "After-hours callout intake",
+      "signal": {
+        "quote": "24 hour callout. If you get the machine, leave a number and we will call back.",
+        "source": "https://example-llanofluid.com/contact"
+      },
+      "tag": "would_help",
+      "lowest_tier": "single_llm",
+      "labor_framing": "If a third of callouts land outside office hours, a structured intake that captures well, location and job type would cover that share, on the assumption the current voicemail is transcribed by hand.",
+      "human_check": "A dispatcher reads every captured callout before a crew is moved."
+    },
+    {
+      "operation": "Counting joints on the pipe rack",
+      "signal": {
+        "quote": "Every string is tallied against the running list before it goes in the hole.",
+        "source": "https://example-llanofluid.com/services/tubing"
+      },
+      "tag": "rules_first",
+      "lowest_tier": "rules",
+      "labor_framing": "The tally already exists as a written record, so the count is a data-entry problem rather than a perception problem.",
+      "human_check": "Not applicable. No model belongs in this pocket yet."
+    },
+    {
+      "operation": "Pressure test sign-off",
+      "signal": {
+        "quote": "A supervisor signs the test chart before the job is released.",
+        "source": "https://example-llanofluid.com/safety"
+      },
+      "tag": "not_ai",
+      "lowest_tier": "rules",
+      "labor_framing": "Low frequency, high consequence. The cost of a wrong answer is measured in people rather than minutes.",
+      "human_check": "The supervisor, and it should stay that way."
+    }
+  ],
+  "where_not_to_use_ai": "The pressure test sign-off and anything else that ends in a signature about safety. The volume is low, a person clears it in minutes, and the cost of a wrong answer is not the kind that gets absorbed. If somebody sells an autonomous version of that, that is the moment to stop listening.",
+  "industry": {
+    "label": "oilfield services",
+    "wins": [
+      {
+        "pattern": "field paperwork keyed twice",
+        "who": "A regional pressure pumping operator",
+        "where": "United States",
+        "what_they_did": "Photographed field tickets at the yard and extracted them into the billing system, with an approval step before invoicing.",
+        "rung": "workflow",
+        "published_result": "Published a reduction from about 4 days to about 1 day in ticket-to-invoice time over a 6 month rollout.",
+        "quote": "Ticket to invoice went from roughly four days to about one.",
+        "source": "https://example-publisher.test/case/ticket-to-invoice",
+        "relevance": "Speaks to the same double keying seen on the how-we-work page. Their fleet is larger, so the hours saved would not scale down evenly."
+      },
+      {
+        "pattern": "after-hours intake",
+        "who": "An industrial services firm",
+        "where": "Canada",
+        "what_they_did": "Replaced an after-hours voicemail box with a structured intake that captured location and job type, then paged the on-call dispatcher.",
+        "rung": "workflow",
+        "published_result": "Reported callbacks starting within 15 minutes on average, against a previous next-morning pattern.",
+        "quote": "The on-call now gets a filled-in job card instead of a voicemail.",
+        "source": "https://example-publisher.test/case/after-hours-intake",
+        "relevance": "The same pocket as the callout line on the contact page, at a comparable size."
+      }
+    ],
+    "cautions": [
+      {
+        "note": "One operator rolled back an automated ticket approval after miscoded line items reached invoices, and reinstated the human approval step. The lesson published was that the extraction was fine and removing the reviewer was not.",
+        "quote": "We kept the extraction and put the approver back.",
+        "source": "https://example-publisher.test/case/rollback"
+      }
+    ]
+  },
+  "limits": "This is a read of a public website and nothing more. It can't see the billing system, the call volume, or what has already been tried, and all three would change the picture.",
+  "next_step": "If any of the above is worth a closer look, the Field Study takes a week or two and studies the operation from the inside, against real numbers.",
+  "sources": [
+    {"n": 1, "url": "https://example-llanofluid.com/how-we-work"},
+    {"n": 2, "url": "https://example-llanofluid.com/contact"},
+    {"n": 3, "url": "https://example-llanofluid.com/services/tubing"},
+    {"n": 4, "url": "https://example-llanofluid.com/safety"},
+    {"n": 5, "url": "https://example-publisher.test/case/ticket-to-invoice"},
+    {"n": 6, "url": "https://example-publisher.test/case/after-hours-intake"},
+    {"n": 7, "url": "https://example-publisher.test/case/rollback"}
+  ],
+  "status": "ok"
+}
