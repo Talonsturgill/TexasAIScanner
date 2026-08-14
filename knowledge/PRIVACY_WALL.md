@@ -39,8 +39,8 @@ published industry examples allowed by fence 2b, in their own labeled section, w
 
 **4. THE REPORT GOES TO ONE ADDRESS AND NOWHERE ELSE.** It is written into a Gmail DRAFT
 addressed to the requester, and a human presses send. It is never published, never posted, never
-linked from the site, and never shown to anyone else. A scan is an unflattering diagnosis of a
-named real business and it belongs to them.
+linked from the site, and never shown to anyone else. The report describes a named business's
+operations and it belongs to them. If they later want it public, that is theirs to decide.
 
 **5. NOTHING ABOUT A REQUESTER IS EVER COMMITTED.** Scan artifacts are built into `out/`, which
 is gitignored, and they stay there. This repo holds the method and the code, never a scan
@@ -62,7 +62,7 @@ than a policy, and it is the main safety argument for having no backend.
 
 ## The one unforgivable failure
 
-**Fabricating an observation.** On a report delivered straight to the operator it is about, in a
-market where everyone talks, an invented fact is the end of the credibility the whole docket is
-built on. The scan-critic defaults to reject. When in doubt, degrade honestly: "we could not see
+**Fabricating an observation.** The report goes straight to the operator it is about, and they
+know their own business better than any scan does. One invented fact and every true thing in the
+report stops counting, in a market where everyone talks. The scan-critic defaults to reject. When in doubt, degrade honestly: "we could not see
 enough of your public footprint to say anything useful" is a finished, shippable result.
