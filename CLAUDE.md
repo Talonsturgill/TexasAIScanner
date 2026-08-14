@@ -1,9 +1,13 @@
 # Texas AI Scanner (the inbound front door)
 
 Source repo for the Texas AI Bottleneck Scanner: a public tool that reads a business's own
-public footprint, on request, and returns one honest feasibility-laddered map of where AI would
-and would not help it. It is the cheap, honest front door of the inbound funnel. It qualifies
-and it teaches.
+public footprint, on request, and returns an honest map of **where AI would actually help them,
+where it would not, and what is already working in their industry.**
+
+It is an OPPORTUNITY map, not an audit and not a critique. The value is that somebody who knows
+this state looked at their operation and said something specific and useful, including the
+parts where the honest answer is that they are already fine. That honesty is what makes the
+opportunities believable, and it is the cheap, generous front door of the inbound funnel.
 
 `prompts/scan_routine.md` is the master run contract. This file is the law above it and never
 bends.
@@ -28,9 +32,9 @@ Alaska carved out one sanctioned automated send, the requested delivery of a res
 address the requester typed, through Buttondown. **Texas does not take that carve-out.** The
 report is written into a Gmail DRAFT, addressed to the requester, and a human presses send.
 
-That is better here for a reason beyond consistency with the rest of this project. A scan is an
-unflattering diagnosis of a named real business, and a person should read it once before it
-reaches them. The draft is where the honesty gate meets a human, and it costs one click.
+That is better here for a reason beyond consistency with the rest of this project. The report
+is the first thing an operator ever sees from us, and it should be good. The draft is where a
+person confirms it is worth their attention before it lands, and it costs one click.
 
 So: **draft only, forever, with no exceptions at all.** No Buttondown, no list, no subscriber
 record, no send capability anywhere in this repo. The two Gmail artifacts per scan are the
@@ -67,16 +71,17 @@ asked honestly the rest of it falls away. Most of Alaska's wall exists to fence 
 point away from private prospect data in a shared database. Texas has no leadflow and no shared
 database, so that entire class of risk is deleted rather than defended.
 
-**Why not GitHub either, which is the more important half.** GitHub Pages is wholly public. A
-scan stored in a repo is a diagnosis of a named real business, published on the internet, where
-its competitors and customers can read it. An unguessable URL does not help, because anyone can
-browse a public repo and read every scan in it. The requester consented to RECEIVE a diagnosis,
-never to have one PUBLISHED. Storing scans in git is not a cheaper database, it is a privacy
-failure wearing one, and it would break fence 6 of the wall this repo is built on.
+**Why not GitHub either, which is the more important half.** GitHub Pages is wholly public, so
+a scan kept in the repo is published to the world. That is not ours to do. The report describes
+a named business's operations, and they asked us to send it to them, not to post it. An
+unguessable URL does not change that, because anyone can browse a public repo and read every
+scan in it.
+
+If a requester later WANTS their result public, that is a fine thing and it is their call to
+make, not a default we take for them.
 
 **So the report is a delivery, not a page.** The requester asks, the scan runs, the report goes
-to the address they typed, and nothing about them persists anywhere public. That is the
-requested-delivery send the One Law already sanctions, and it is now the whole product surface.
+to the address they typed, and nothing about them persists anywhere public.
 
 ### What that removes, and what it costs
 

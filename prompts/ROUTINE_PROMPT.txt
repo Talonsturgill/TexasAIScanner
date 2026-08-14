@@ -1,0 +1,8 @@
+Read prompts/scan_routine.md from main in Talonsturgill/TexasAIScanner and execute it for the
+scan request pasted below.
+
+CLAUDE.md in that repo is the law above the routine. The three things that end a run badly are
+fabricating an observation, letting the footprint lane and the industry lane mix, and sending
+anything at all. The report goes into a Gmail DRAFT and a human presses send.
+
+REQUEST:
