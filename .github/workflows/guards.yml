@@ -129,10 +129,15 @@ jobs:
         # out/ now holds a rendered report and a draft payload, which is exactly what must never
         # be committed. Checked here, after the pipe has run, because before it there is nothing
         # to catch.
+        #
+        # The first version of this step gated on `git status --porcelain out/` being non-empty,
+        # which is backwards: status says NOTHING about an ignored path unless asked with
+        # --ignored, so the one arrangement that proves the rule holds produced no output and
+        # fell through to the failure branch. It went red on a clean repo. Two commands answer
+        # the actual question and neither needs a compound condition.
         run: |
-          if [ -n "$(git status --porcelain out/ 2>/dev/null)" ] && git check-ignore -q out/; then
-            echo "out/ is ignored, as it must be"
-          else
-            echo "out/ is not ignored and now holds a rendered report"; exit 1
-          fi
-          test -z "$(git ls-files out/)" || { echo "a scan artifact is tracked"; exit 1; }
+          git check-ignore -q out/ \
+            || { echo "out/ is not ignored, and it now holds a rendered report"; exit 1; }
+          test -z "$(git ls-files out/)" \
+            || { echo "a scan artifact is tracked: $(git ls-files out/)"; exit 1; }
+          echo "out/ is ignored and nothing under it is tracked"
