@@ -1,6 +1,6 @@
 # Texas AI Scanner
 
-[![guards](https://github.com/Talonsturgill/texasaiscanner/actions/workflows/guards.yml/badge.svg)](https://github.com/Talonsturgill/texasaiscanner/actions/workflows/guards.yml)
+[![guards](https://github.com/Talonsturgill/TexasAIScanner/actions/workflows/guards.yml/badge.svg)](https://github.com/Talonsturgill/TexasAIScanner/actions/workflows/guards.yml)
 
 The Bottleneck Scanner behind [alaskaaihq-style Texas AI Docket](https://github.com/Talonsturgill/TexasAIDocket).
 A business asks for a look at its own public footprint, and gets back an honest map of where AI
