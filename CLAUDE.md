@@ -129,6 +129,18 @@ by code from data and can be recomputed. A model that writes "about 40 hours a w
 guessing at a formatting problem it does not know it has. Ranges are computed from a stated
 assumption, and the assumption is printed beside the range.
 
+**The mechanism, because a law with no mechanism is a habit.** `scripts/labor_math.py` owns the
+one piece of arithmetic in the scanner. The feasibility-mapper supplies what it OBSERVED and
+never the answer, and a `labor_framing` written as a plain string may carry no quantity at all,
+in digits or spelled out. `build_scan_page.py` then **refuses to write the page** when a numeral
+in the scanner's own copy about the requester traces to no computation and to no quoted source.
+
+That gate covers the headline, the operation names, the human checks, the where-not-to-use-AI
+line, the limits and the next step. It deliberately does NOT cover a verbatim quote or the
+industry lane, and the boundary is stated in the code rather than implied: those are somebody
+else's numbers with a source rendered beside them, the contract requires a published result to
+be exact as published, and rewriting one to satisfy a gate would be the real dishonesty.
+
 ## COST AND ABUSE DISCIPLINE
 
 There is no public endpoint that fires agents, which is most of this problem solved by not
@@ -137,8 +149,19 @@ maintainer or a scheduled routine picks up, never a URL a stranger can hammer.
 
 What remains: the form carries a honeypot field and FormSubmit's own abuse handling, the
 routine refuses more than one scan per domain per thirty days (`ledger/scanned.json`, which
-holds domains and dates and nothing about the business), and a run that cannot fetch the site
+holds domains and dates and nothing about the business), and a run that can't fetch the site
 degrades honestly rather than retrying forever.
+
+**Both of those are mechanisms now, not intentions.** The scan form keeps FormSubmit's captcha
+ON, deliberately diverging from the docket's services form, which switches it off. A services
+enquiry costs a maintainer the seconds it takes to read. A scan request is an item in a queue
+that costs money and runs research when it is picked up, and the honeypot alone stops only a bot
+careless enough to fill a field it can't see. The thirty day window is enforced by
+`scripts/scanned_ledger.py`, which does the date arithmetic, pins the record shape, and refuses
+any key other than `domain` and `date`. **Nothing hand-edits that ledger.** It was a free-form
+file that a model appended to in whatever shape it chose, and a second spelling of the keys
+makes an earlier entry invisible to the next check, which switches the no-repeat off with
+nothing going red.
 
 ## VOICE
 
@@ -157,25 +180,47 @@ Never a colon in a hooky sentence, and never a semicolon anywhere.
 ## LAYOUT
 
 - `prompts/` — `scan_routine.md` (the run contract) + `ROUTINE_PROMPT.txt` (the thin trigger text).
-- `config/` — `brand.yaml` (tokens and voice), `scan_contract.md` (the scan.json shape and the
-  tagging rules).
+- `config/` — `scan_contract.md` (the scan.json shape, the labor framing forms, the tagging
+  rules). There is no `brand.yaml` here. The palette is a handful of constants at the top of
+  `build_scan_page.py`, beside the note on why the urgent red is absent, and the voice is the
+  VOICE section above. A separate token file would be a second place for both to drift.
 - `knowledge/` — `AI_SCOPING_LADDER` (the feasibility ladder), `BOTTLENECK_MAP` (the Texas
   industry map), `PRIVACY_WALL` (the fences).
 - `.claude/agents/` — footprint-analyst, industry-scout, feasibility-mapper, scan-critic.
-- `scripts/` — `normalize_domain.py` (the exact rule), `build_scan_page.py` (the self-contained
-  renderer), `scan_draft.py` (builds the Gmail draft, and it has no send path in it).
-- `web/scan.html` — the public form, served from the docket site at `/scan/`. Posts to
-  FormSubmit, exactly as the services form does. No key, no token, no server.
+- `scripts/` — every one carries a `--self-test` that replays the defect it exists for, and they
+  are run BY EXIT CODE and never by reading the last line.
+  - `normalize_domain.py` — the exact rule. Fails loud rather than empty, because everything
+    downstream keys on its output.
+  - `labor_math.py` — the only arithmetic in the scanner. See NUMBERS ARE COMPUTED above.
+  - `build_scan_page.py` — the self-contained renderer, and the numeral gate. Drops what it
+    can't trace and refuses to write a page carrying a figure nobody computed.
+  - `scanned_ledger.py` — the thirty day no-repeat. Owns `ledger/scanned.json` outright.
+  - `scan_draft.py` — builds the Gmail draft, and it has no send path in it. Its self-test
+    proves that by reading its own source, `main()` included.
+- `web/scan.html` — the public form, served from the docket site at `/scan/`. **A template, not
+  a page.** `{FORM_ACTION}` is a required substitution, and served verbatim the form posts to
+  that literal path, 404s, and loses every request with nobody told. Posts to FormSubmit, with
+  the captcha ON, which is the one place it diverges from the services form. No key, no token,
+  no server.
 - `ledger/scanned.json` — domains and dates only, the thirty day no-repeat. Never a business
-  fact, never an email.
-- `samples/` — a sample `scan.json` for offline rendering.
+  fact, never an email. Written by `scanned_ledger.py` and never by hand.
+- `samples/` — a sample `scan.json` for offline rendering. It is also a fixture: the renderer's
+  self-test asserts the shipped sample passes the numeral gate and goes red when a typed figure
+  is planted in it, so the gate can't pass by having nothing to check.
 
 ## SIBLING REPOS
 
 | Repo | Relationship |
 |---|---|
-| `TexasAIDocket` | serves the public site, including `/scan/`. Vendors this repo's contract under `vendor/scanner/` for a sync check, and never edits it |
+| `TexasAIDocket` | serves the public site. It is INTENDED to serve `/scan/` and to vendor this repo's contract under `vendor/scanner/` for a sync check, never editing it. **Neither exists there yet**, see below |
 | `TexasAIDispatch` | the video engine. No relationship to this repo |
+
+**The `/scan/` page is not live, and this table used to say it was.** `TexasAIDocket` has no
+`docs/scan/`, no `vendor/scanner/`, and no build step that reads `web/scan.html` or substitutes
+`{FORM_ACTION}`. Until that lands there, the form in this repo is a template nobody serves, and
+the intake path described under THE INTAKE PATH has no front door on it. Standing that up is a
+change to the docket repo and it is that repo's `site` actor's work, not this one's. Anybody
+reading this repo and expecting requests to arrive should know they can't yet.
 
 The Alaska repos are REFERENCE ONLY. Never write to them from a session here.
 
@@ -183,8 +228,16 @@ The Alaska repos are REFERENCE ONLY. Never write to them from a session here.
 
 ```
 python3 scripts/build_scan_page.py --scan samples/sample-scan.json --out out/sample.html
+
 python3 scripts/normalize_domain.py --self-test
+python3 scripts/labor_math.py       --self-test
+python3 scripts/build_scan_page.py  --self-test
+python3 scripts/scanned_ledger.py   --self-test
+python3 scripts/scan_draft.py       --self-test
 ```
+
+**Run them by exit code.** Each prints advice on a failure and one clean line on success, which
+looks reassuring either way under `tail -1`.
 
 There is nothing to deploy. The form is static and posts to FormSubmit. The report is built
 locally by the routine, and `scan_draft.py` puts it in a Gmail draft for a human to send.
