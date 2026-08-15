@@ -1,0 +1,138 @@
+name: guards
+
+# Every gate this repo owns, run on every PULL REQUEST and every MERGE to main.
+#
+# WHY IT EXISTS. Three scripts here each carry a --self-test and nothing ran any of them. A
+# self-test nobody runs is a comment. The one that matters most is the proof that this repo has
+# no send path in it, which is the single law in CLAUDE.md, and it was sitting in a function
+# waiting for somebody to think to type it.
+#
+# NOT ON EVERY PUSH, deliberately. The sibling repo ran its gates on every push to every branch
+# and mailed the maintainer a red for each work-in-progress commit, until the noise was the whole
+# signal. The merge is where a change becomes real and the pull_request trigger already gates
+# every merge, so this runs on PRs and on main itself. A red here is a red that means something.
+#
+# EVERY STEP IS READ BY ITS EXIT CODE. None of these is a report to skim. A gate that prints
+# advice on failure and one clean line on success looks equally reassuring under `tail -1`, and
+# that has shipped a red gate in this project before.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guards-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ------------------------------------------------------------ the checkers work
+      #
+      # These prove each gate CAN GO RED. They reintroduce known-bad input and require the
+      # checker to reject it. On their own they say nothing about whether this repo is clean,
+      # which is what the second half of this job is for.
+
+      - name: Domain rule self-test (one business, typed any way, is one key)
+        run: python3 scripts/normalize_domain.py --self-test
+
+      - name: Renderer self-test (an unsourced observation is dropped, not warned about)
+        run: python3 scripts/build_scan_page.py --self-test
+
+      - name: Draft builder self-test (one address, escaped input, and no send path)
+        run: python3 scripts/scan_draft.py --self-test
+
+      - name: Repo guards self-test (every law below, proved able to fail)
+        run: python3 scripts/repo_guards.py --self-test
+
+      # ------------------------------------------------------------ and this repo is clean
+      #
+      # The half that reads the actual committed files. A green self-test says the checker
+      # works, not that the thing it checks is clean, and running only the first half is the
+      # most common way a suite in this project has been green over a broken product.
+
+      - name: The laws that live between files
+        # No send path anywhere, nothing about a requester in git, the ledger holding domains
+        # and dates only, everything wired to something, the form and the run contract still
+        # agreeing, and the house voice on both published surfaces.
+        run: python3 scripts/repo_guards.py
+
+      - name: The sample scan actually renders
+        # The renderer's self-test builds its own fixture, so it never reads the committed
+        # sample. This does. It is also the only step that would notice sample-scan.json
+        # drifting out of the shape config/scan_contract.md describes.
+        run: |
+          python3 scripts/build_scan_page.py --scan samples/sample-scan.json --out out/sample.html
+          test -s out/sample.html || { echo "the renderer wrote an empty report"; exit 1; }
+
+      - name: Nothing was silently dropped from the sample
+        # The renderer DROPS an observation it cannot trace to a fetched page, by design. On a
+        # real run that is the gate working. On the committed sample it means the fixture has
+        # rotted, and a fixture that quietly renders three of its four observations is how a
+        # renderer bug hides.
+        run: |
+          python3 - <<'PY'
+          import importlib.util, json, sys
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("b", "scripts/build_scan_page.py")
+          b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
+          scan = json.loads(Path("samples/sample-scan.json").read_text(encoding="utf-8"))
+          kept = len(b.usable_observations(scan))
+          total = len(scan.get("observations") or [])
+          wins_kept = len(b.usable_wins(scan))
+          wins_total = len((scan.get("industry") or {}).get("wins") or [])
+          if kept != total:
+              sys.exit(f"{total - kept} of {total} sample observations have no source")
+          if wins_kept != wins_total:
+              sys.exit(f"{wins_total - wins_kept} of {wins_total} sample industry wins have no source")
+          print(f"sample renders whole: {kept} observation(s), {wins_kept} industry win(s)")
+          PY
+
+      - name: A draft is built end to end, and it carries one address
+        # The three scripts are only a product when they run in sequence. This is the only step
+        # that walks the real pipe, sample to report to draft payload, and asserts the shape a
+        # human is about to press send on.
+        run: |
+          python3 scripts/scan_draft.py --scan samples/sample-scan.json --html out/sample.html \
+                  --to owner@example.com --out out/draft.json
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+          d = json.loads(Path("out/draft.json").read_text(encoding="utf-8"))
+          if d.get("to") != "owner@example.com":
+              sys.exit(f"the draft is addressed to {d.get('to')!r}")
+          if not isinstance(d.get("to"), str):
+              sys.exit("the draft carries more than one recipient")
+          for field in ("cc", "bcc"):
+              if field in d:
+                  sys.exit(f"the draft grew a {field} field, and this product mails one address")
+          if d.get("draft_only") is not True:
+              sys.exit("the payload is not flagged draft_only")
+          if "Llano Fluid" not in d.get("body_html", ""):
+              sys.exit("the report did not make it into the draft body")
+          print("draft ok: one address, no cc or bcc, draft_only, report carried")
+          PY
+
+      - name: No scan artifact escaped into git
+        # out/ now holds a rendered report and a draft payload, which is exactly what must never
+        # be committed. Checked here, after the pipe has run, because before it there is nothing
+        # to catch.
+        run: |
+          if [ -n "$(git status --porcelain out/ 2>/dev/null)" ] && git check-ignore -q out/; then
+            echo "out/ is ignored, as it must be"
+          else
+            echo "out/ is not ignored and now holds a rendered report"; exit 1
+          fi
+          test -z "$(git ls-files out/)" || { echo "a scan artifact is tracked"; exit 1; }

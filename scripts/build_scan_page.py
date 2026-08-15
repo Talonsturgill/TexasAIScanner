@@ -202,7 +202,7 @@ def render(scan: dict) -> str:
         P.append("</div>")
 
     if cautions:
-        P.append("<h2>And where it did not work</h2>")
+        P.append("<h2>Where it did not work</h2>")
         P.append("<p class=\"lane\">Published failures and limits. This section is the reason to "
                  "believe the one above it.</p>")
         for c in cautions:

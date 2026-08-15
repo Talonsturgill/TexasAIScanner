@@ -145,25 +145,44 @@ degrades honestly rather than retrying forever.
 Operator-blunt, specific, receipts first, honest about limits. The docket's house rules hold:
 
 No em dashes or en dashes anywhere. Ranges read "X to Y". No emojis. Straight quotes only.
-Never "cannot", always "can't". Never open a sentence with "And" or "But". No first person in
-published copy. Dates take the ordinal, month first.
+Never "cannot", always "can't". Never open a sentence with "And" or "But". Dates take the
+ordinal, month first.
 
 **Colons.** The docket bans them in published prose. The scan PAGE is a labeled document rather
 than prose, so a label colon is allowed there, the same carve-out the docket gives a data table.
 Never a colon in a hooky sentence, and never a semicolon anywhere.
+
+**First person, split by surface**, for the same structural reason as the colon. The FORM is
+public marketing copy served on the docket's own site and takes the docket's rule, no first
+person, because a page about somebody else's operation that keeps saying "we" is talking about
+itself. The REPORT is a letter to one operator who asked for it, and correspondence written in
+the third person reads like a machine produced it, which is the opposite of what this product is
+selling. `repo_guards.py` enforces exactly that split, so neither half drifts by accident.
+
+Every rule here is CHECKED against the RENDERED surfaces rather than the source, because the
+report a reader sees is assembled from f-strings and ledger fields and exists as a whole
+sentence nowhere in the code. A quotation is stripped before the check and never rewritten to
+fit a house rule, because editing a quote to suit our punctuation is falsifying it.
 
 **If a scan could have been produced for any other business, it failed.**
 
 ## LAYOUT
 
 - `prompts/` — `scan_routine.md` (the run contract) + `ROUTINE_PROMPT.txt` (the thin trigger text).
-- `config/` — `brand.yaml` (tokens and voice), `scan_contract.md` (the scan.json shape and the
-  tagging rules).
+- `config/` — `scan_contract.md` (the scan.json shape and the tagging rules). There is no
+  `brand.yaml` here on purpose. The report carries five colour tokens and nothing else, so they
+  live as named constants in the renderer that draws them rather than in a config file one file
+  reads. If a second surface ever needs them, that is the moment to lift them out.
 - `knowledge/` — `AI_SCOPING_LADDER` (the feasibility ladder), `BOTTLENECK_MAP` (the Texas
   industry map), `PRIVACY_WALL` (the fences).
 - `.claude/agents/` — footprint-analyst, industry-scout, feasibility-mapper, scan-critic.
 - `scripts/` — `normalize_domain.py` (the exact rule), `build_scan_page.py` (the self-contained
-  renderer), `scan_draft.py` (builds the Gmail draft, and it has no send path in it).
+  renderer), `scan_draft.py` (builds the Gmail draft, and it has no send path in it),
+  `repo_guards.py` (the laws that live BETWEEN files, which no single script's self-test can
+  see, including the repo-wide proof that nothing here can send).
+- `.github/workflows/guards.yml` — runs every gate above on each pull request and each merge to
+  main, by EXIT CODE. Both halves: the self-tests, which prove the checkers can go red, and then
+  the checks against the committed files, which is the half that says anything about this repo.
 - `web/scan.html` — the public form, served from the docket site at `/scan/`. Posts to
   FormSubmit, exactly as the services form does. No key, no token, no server.
 - `ledger/scanned.json` — domains and dates only, the thirty day no-repeat. Never a business
@@ -184,6 +203,14 @@ The Alaska repos are REFERENCE ONLY. Never write to them from a session here.
 ```
 python3 scripts/build_scan_page.py --scan samples/sample-scan.json --out out/sample.html
 python3 scripts/normalize_domain.py --self-test
+```
+
+Everything CI runs, in one line, and READ IT BY EXIT CODE rather than by its last printed line:
+
+```
+for g in normalize_domain build_scan_page scan_draft repo_guards; do
+  python3 scripts/$g.py --self-test || echo "RED: $g"; done
+python3 scripts/repo_guards.py || echo "RED: the repo itself"
 ```
 
 There is nothing to deploy. The form is static and posts to FormSubmit. The report is built
