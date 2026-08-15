@@ -41,8 +41,24 @@ at when it points anywhere.
       },
       "tag": "would_help|rules_first|not_ai",
       "lowest_tier": "rules|retrieval|single_llm|workflow|agent",
-      "labor_framing": "",// a RANGE with its assumption stated beside it. computed, never
-                          //   typed. NEVER a dollar hero number and NEVER a promise.
+
+      // LABOR FRAMING TAKES ONE OF TWO FORMS, and they are told apart by TYPE.
+      // See "Labor framing is computed" below. Never a dollar hero number, never a promise.
+      //
+      //   A STRING, carrying NO quantity at all, in numerals or in letters:
+      "labor_framing": "The tally already exists as a written record, so the count is a
+                        data-entry problem rather than a perception problem.",
+      //
+      //   ...or an OBJECT of what was OBSERVED, which scripts/labor_math.py turns into the
+      //   sentence. The arithmetic and the wording both happen there.
+      "labor_framing": {
+        "actor": "the office keys",         // operator words, no quantity
+        "volume": { "low": 60, "high": 120, "unit": "tickets", "per": "a week" },
+        "minutes_each": { "low": 3, "high": 5 },
+        "of_what": "retyping",              // optional
+        "assumption": "a ticket takes one pass"   // REQUIRED. printed beside the range.
+      },
+
       "human_check": ""   // who catches a wrong answer before it lands. required on would_help.
     }
   ],
@@ -90,6 +106,35 @@ reason.
 A published result from another operator is never restated as what this requester will get.
 "They published forty percent fewer intake minutes" is allowed. "You will cut intake forty
 percent" is the never-promise violation and the scan-critic kills it.
+
+## Labor framing is computed, and this is the mechanism
+
+CLAUDE.md: "Every numeral this scanner publishes is produced by code from data and can be
+recomputed. A model that writes 'about 40 hours a week' is guessing at a formatting problem it
+does not know it has."
+
+That was a paragraph with nothing under it. `labor_framing` was a free string, so the arithmetic
+lived inside a quoted sentence a model wrote. The sample shipped "60 to 120 tickets a week at 3
+to 5 minutes each, that is roughly 3 to 10 hours a week", which is a multiplication and a
+division carried out by a language model and typed into JSON. A model told the volume is 120 and
+the minutes are 5 and writing "12 hours" would have reached the operator it was about.
+
+**Supply what was OBSERVED. Never supply the answer.** `scripts/labor_math.py` multiplies,
+divides, rounds by a written rule, and writes the sentence, so the figure and the words carrying
+it come out of the same call and can't drift apart.
+
+- **The assumption is required on the computed form.** A range with no stated assumption is a
+  hero number wearing a range's clothes, and `labor_math` refuses it.
+- **A plain-string framing carries no quantity**, in numerals or written out. "Roughly forty
+  hours" is the same guess wearing letters. Both are refused.
+- A framing that can't be computed is **dropped from the report**, and `build_scan_page.py`
+  prints which observation lost it and why. It is never printed with a number in it.
+- **`build_scan_page.py` will not write a page at all** if a numeral in the scanner's own copy
+  about the requester traces to no computation and to no quoted source. That gate covers the
+  headline, the operation names, the human checks, the where-not-to-use-AI line, the limits and
+  the next step. It deliberately does NOT cover a verbatim quote or the industry lane, because
+  those are somebody else's numbers with a source rendered beside them, and rewriting a
+  published figure to satisfy a gate would be the actual dishonesty.
 
 ## Tagging rules (the honesty spine)
 
