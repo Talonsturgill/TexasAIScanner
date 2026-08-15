@@ -41,6 +41,12 @@ create table if not exists scanner.scans (
   -- human-gated draft to the maintainer, same as every other path here.
   notify_email   text,
 
+  -- The form's free-text box. Stored so a person can read it, and NEVER put in
+  -- the trigger payload, so it cannot reach an agent as instructions. It arrived
+  -- from a stranger through a public form: it is context for a human.
+  -- (migration scanner_note)
+  note           text,
+
   request_ip     text,
   user_agent     text,
   error          text,
@@ -110,10 +116,12 @@ $$;
 
 create or replace function public.scanner_create(
     p_domain text, p_booking text, p_jobs text, p_ip text, p_ua text,
-    p_notify text default null)
+    p_notify text default null, p_note text default null)
   returns jsonb language sql security definer set search_path = '' as $$
-  insert into scanner.scans (domain, booking_url, jobs_signal, request_ip, user_agent, notify_email, status)
-  values (p_domain, p_booking, p_jobs, p_ip, p_ua, left(p_notify, 320), 'queued')
+  insert into scanner.scans (domain, booking_url, jobs_signal, request_ip, user_agent,
+                             notify_email, note, status)
+  values (p_domain, p_booking, p_jobs, p_ip, p_ua, left(p_notify, 320),
+          left(p_note, 4000), 'queued')
   returning jsonb_build_object('id', id, 'token', public_token);
 $$;
 
@@ -167,7 +175,7 @@ begin
     'public.scanner_today_count()',
     'public.scanner_ip_count(text)',
     'public.scanner_cached(text, int)',
-    'public.scanner_create(text, text, text, text, text, text)',
+    'public.scanner_create(text, text, text, text, text, text, text)',
     'public.scanner_mark_failed(uuid, text)',
     'public.scanner_get_by_token(text)',
     'public.scanner_config()',

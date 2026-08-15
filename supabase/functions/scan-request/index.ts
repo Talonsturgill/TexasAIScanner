@@ -107,6 +107,11 @@ Deno.serve(async (req) => {
       ? payload.notify_email.trim().slice(0, 320)
       : null;
 
+  // The form's free-text box. Stored so a person can read it, and NEVER put in
+  // the trigger payload below, so it cannot reach an agent as instructions. It
+  // arrived from a stranger through a public form: it is context for a human.
+  const note = typeof payload.note === "string" ? payload.note.slice(0, 4000) : null;
+
   const { data: dbCfg } = await sb.rpc("scanner_config");
   const cfg = (k: string, d = "") => env(k.toUpperCase(), "") || (dbCfg?.[k] ?? d);
 
@@ -133,7 +138,7 @@ Deno.serve(async (req) => {
 
   const { data: row, error } = await sb.rpc("scanner_create", {
     p_domain: domain, p_booking: booking_url, p_jobs: jobs_signal, p_ip: ip, p_ua: ua,
-    p_notify: notify_email,
+    p_notify: notify_email, p_note: note,
   });
   if (error || !row?.token) return json({ error: "could not start the scan" }, 500);
 
