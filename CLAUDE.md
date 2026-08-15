@@ -105,10 +105,42 @@ schema. This paragraph is their record, so a future reader does not go looking f
 
 ### The intake path
 
-`https://alaskaaihq.com`-style FormSubmit is already how the docket's services form works, so
-the scan form uses the same path: the form posts to FormSubmit, the maintainer's mailbox is the
-queue, the routine runs the scan, and `scan_draft.py` writes the finished report into a Gmail
-draft addressed to the requester. A human presses send. No token, no key, no server.
+**REVISED 2026-08-15. The first version used FormSubmit and no server at all**: the form
+posted to FormSubmit, the maintainer's mailbox was the queue, and a human pasted the request
+into the routine by hand. That was a real design and it is written down here because the reason
+it changed matters more than the change.
+
+A mailbox is a fine queue for a person and a poor one for a machine. Firing the routine the
+moment somebody submits needs something that can hold an Anthropic API key and call the routines
+fire endpoint, and a key cannot live in a static page. So the intake now matches the sibling
+scanner's: **the form posts to the `scan-request` Edge Function**, which is the only thing the
+public talks to.
+
+**HALF DONE AS OF 2026-08-15, and said out loud because a doc that describes the finished shape
+while the product is mid-migration is how a repo starts lying.** The backend is deployed and
+verified. `web/scan.html` STILL POSTS TO FORMSUBMIT, and switching it is the last step: it needs
+a Cloudflare Turnstile site key, which does not exist yet, and pointing the form at a gatekeeper
+whose captcha fails closed would take the form down. Every sentence below in the present tense
+describes the backend, which is real. The form is the piece still on the old path.
+
+What the gatekeeper does, in order: verifies the Turnstile captcha, enforces a global daily cap
+and a per-IP cap, serves a cached scan for a domain seen in the last week, writes a
+`scanner.scans` row, and fires the routine with a Bearer token it holds server-side.
+`scan-result` hands one scan back by its unguessable token and nothing else.
+
+What did NOT change, and is the part that matters: **nothing sends.** The routine still writes
+the finished report into a Gmail draft addressed to the requester and a human presses send.
+
+WHAT THE CHANGE COSTS, stated plainly rather than buried. There is now a database holding a
+domain, an IP and a user agent per request, where before there was an email in one mailbox. The
+privacy wall is what keeps that honest: RLS is on with no policies, so the anon key reads
+nothing, every access goes through eight named service-role-only RPCs, and the only shape the
+browser can ever get back is one scan by its own token.
+
+CAPS ARE THE THING THAT REPLACED THE HUMAN. When a person pasted each request in, they were the
+ceiling on spend. Auto-firing removes that, so the ceiling is now `daily_cap` and `ip_cap` in
+`scanner.config`, and the captcha FAILS CLOSED: a missing Turnstile secret refuses every request
+rather than waving them through, because the alternative is a failure you notice on a bill.
 
 ## HONESTY (the gate and the brand)
 
@@ -286,5 +318,18 @@ python3 scripts/repo_guards.py || echo "RED: the repo itself"
 The six self-tests prove the checkers can go red. The last line is the half that says anything
 about THIS repo, and it is the one that catches what no single file can see.
 
-There is nothing to deploy. The form is static and posts to FormSubmit. The report is built
-locally by the routine, and `scan_draft.py` puts it in a Gmail draft for a human to send.
+DEPLOYING. The page is static. The backend is the Supabase project `texas-ai-scanner`
+(`fbcxboktppalytugeqin`): `db/schema.sql` is the schema as applied, and `supabase/functions/`
+holds the two Edge Functions as deployed. The report is still built locally by the routine, and
+`scan_draft.py` still puts it in a Gmail draft for a human to send.
+
+Four values live in `scanner.config` and nowhere else. None of them belongs in this repo:
+
+    insert into scanner.config (key, value) values
+      ('trigger_url',      'https://.../routines/<routine id>/fire'),
+      ('trigger_secret',   '<the Anthropic API key>'),
+      ('turnstile_secret', '<the Cloudflare Turnstile secret>')
+    on conflict (key) do update set value = excluded.value, updated_at = now();
+
+`daily_cap`, `ip_cap`, `cache_hours` and `captcha_required` are already seeded. Changing a cap is
+one update and no redeploy, which is the whole reason config is a table.
