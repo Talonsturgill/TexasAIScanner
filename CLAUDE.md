@@ -168,12 +168,24 @@ nothing going red.
 Operator-blunt, specific, receipts first, honest about limits. The docket's house rules hold:
 
 No em dashes or en dashes anywhere. Ranges read "X to Y". No emojis. Straight quotes only.
-Never "cannot", always "can't". Never open a sentence with "And" or "But". No first person in
-published copy. Dates take the ordinal, month first.
+Never "cannot", always "can't". Never open a sentence with "And" or "But". Dates take the
+ordinal, month first.
 
 **Colons.** The docket bans them in published prose. The scan PAGE is a labeled document rather
 than prose, so a label colon is allowed there, the same carve-out the docket gives a data table.
 Never a colon in a hooky sentence, and never a semicolon anywhere.
+
+**First person, split by surface**, for the same structural reason as the colon. The FORM is
+public marketing copy served on the docket's own site and takes the docket's rule, no first
+person, because a page about somebody else's operation that keeps saying "we" is talking about
+itself. The REPORT is a letter to one operator who asked for it, and correspondence written in
+the third person reads like a machine produced it, which is the opposite of what this product is
+selling. `repo_guards.py` enforces exactly that split, so neither half drifts by accident.
+
+Every rule here is CHECKED against the RENDERED surfaces rather than the source, because the
+report a reader sees is assembled from f-strings and ledger fields and exists as a whole
+sentence nowhere in the code. A quotation is stripped before the check and never rewritten to
+fit a house rule, because editing a quote to suit our punctuation is falsifying it.
 
 **If a scan could have been produced for any other business, it failed.**
 
@@ -197,6 +209,12 @@ Never a colon in a hooky sentence, and never a semicolon anywhere.
   - `scanned_ledger.py` — the thirty day no-repeat. Owns `ledger/scanned.json` outright.
   - `scan_draft.py` — builds the Gmail draft, and it has no send path in it. Its self-test
     proves that by reading its own source, `main()` included.
+  - `repo_guards.py` — the laws that live BETWEEN files, which no single script's self-test can
+    see. Each of the above proves one FILE; every law in this document is about the REPO, and a
+    second file importing `smtplib` passes all five suites because none of them is looking.
+- `.github/workflows/guards.yml` — runs every gate above on each pull request and each merge to
+  main, by EXIT CODE. Both halves: the self-tests, which prove the checkers can go red, and then
+  the checks against the committed files, which is the half that says anything about this repo.
 - `web/scan.html` — the public form, served from the docket site at `/scan/`. **A template, not
   a page.** `{FORM_ACTION}` is a required substitution, and served verbatim the form posts to
   that literal path, 404s, and loses every request with nobody told. Posts to FormSubmit, with
@@ -234,10 +252,20 @@ python3 scripts/labor_math.py       --self-test
 python3 scripts/build_scan_page.py  --self-test
 python3 scripts/scanned_ledger.py   --self-test
 python3 scripts/scan_draft.py       --self-test
+python3 scripts/repo_guards.py      --self-test
 ```
 
 **Run them by exit code.** Each prints advice on a failure and one clean line on success, which
-looks reassuring either way under `tail -1`.
+looks reassuring either way under `tail -1`. Everything CI runs, in one line:
+
+```
+for g in normalize_domain labor_math build_scan_page scanned_ledger scan_draft repo_guards; do
+  python3 scripts/$g.py --self-test >/dev/null || echo "RED: $g"; done
+python3 scripts/repo_guards.py || echo "RED: the repo itself"
+```
+
+The six self-tests prove the checkers can go red. The last line is the half that says anything
+about THIS repo, and it is the one that catches what no single file can see.
 
 There is nothing to deploy. The form is static and posts to FormSubmit. The report is built
 locally by the routine, and `scan_draft.py` puts it in a Gmail draft for a human to send.

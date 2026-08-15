@@ -342,9 +342,12 @@ def render(scan: dict) -> str:
 
     if cautions:
         P.append("<h2>Where it did not work</h2>")
+        # THE SENTENCE DEPENDS ON THERE BEING A SECTION ABOVE IT. A cautions-only return
+        # renders this heading with no wins block, and the static wording then points a reader
+        # at something that is not on the page.
         P.append("<p class=\"lane\">Published failures and limits"
                  + (". This section is the reason to believe the one above it.</p>" if wins
-                    else " published by operators in this industry.</p>"))
+                    else " from operators in this industry.</p>"))
         for c in cautions:
             csrc = safe_url(c.get("source"))
             P.append(f"<p class=\"note\">{e(c.get('note'))}<br>"
