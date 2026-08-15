@@ -230,15 +230,34 @@ fit a house rule, because editing a quote to suit our punctuation is falsifying 
 
 | Repo | Relationship |
 |---|---|
-| `TexasAIDocket` | serves the public site. It is INTENDED to serve `/scan/` and to vendor this repo's contract under `vendor/scanner/` for a sync check, never editing it. **Neither exists there yet**, see below |
+| `TexasAIDocket` | serves the public site, INCLUDING `/scan/`, which is live. It does not read this repo's `web/scan.html`, it re-authors the same form in Python, so there are two copies of one page and no sync check. See below |
 | `TexasAIDispatch` | the video engine. No relationship to this repo |
 
-**The `/scan/` page is not live, and this table used to say it was.** `TexasAIDocket` has no
-`docs/scan/`, no `vendor/scanner/`, and no build step that reads `web/scan.html` or substitutes
-`{FORM_ACTION}`. Until that lands there, the form in this repo is a template nobody serves, and
-the intake path described under THE INTAKE PATH has no front door on it. Standing that up is a
-change to the docket repo and it is that repo's `site` actor's work, not this one's. Anybody
-reading this repo and expecting requests to arrive should know they can't yet.
+**The front door is up.** The docket's site build renders its scan page from a `scan_page()`
+function in its own site builder, wired into its page list, and its `FORM_ACTION` constant is a
+live FormSubmit alias interpolated at build time, so no placeholder reaches the published page. A
+request typed into that form lands in the docket mailbox. Verified against that repo's `main` on
+2026-08-15th.
+
+Paths over there are described rather than written as paths, deliberately. `repo_guards` GUARD 4
+requires every path this file names to exist in THIS repo, which is the correct rule and caught
+an earlier draft of this very paragraph citing the docket's builder by path.
+
+**What is actually missing is narrower, and it is a drift risk rather than a dead end.** The
+docket does not read `web/scan.html`. It writes the same copy again, in Python, in its own file.
+Two copies of one page with nothing comparing them is how they end up promising different things
+to the same reader, and they had already drifted once: this repo's copy still said "Give us your
+website. We read what is public" after the published page had been rewritten out of the first
+person. `repo_guards` GUARD 5 pins the PROMISES in this repo's copy against the run contract,
+which is the half that matters most, and nothing yet compares either against what the docket
+actually serves. The `vendor/scanner/` sync check named in the port manifest is the intended
+answer and does not exist yet. Standing it up is the docket's `site` actor's work, not this
+repo's.
+
+An earlier version of this section said `/scan/` was not live at all and that requests could not
+arrive. That was written against a docket state that was already stale when it was written, and
+it was wrong. The lesson is the one this repo keeps relearning in other forms: **a claim about
+another repo has to be checked against that repo, not remembered.**
 
 The Alaska repos are REFERENCE ONLY. Never write to them from a session here.
 
