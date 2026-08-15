@@ -116,12 +116,15 @@ fire endpoint, and a key cannot live in a static page. So the intake now matches
 scanner's: **the form posts to the `scan-request` Edge Function**, which is the only thing the
 public talks to.
 
-**HALF DONE AS OF 2026-08-15, and said out loud because a doc that describes the finished shape
-while the product is mid-migration is how a repo starts lying.** The backend is deployed and
-verified. `web/scan.html` STILL POSTS TO FORMSUBMIT, and switching it is the last step: it needs
-a Cloudflare Turnstile site key, which does not exist yet, and pointing the form at a gatekeeper
-whose captcha fails closed would take the form down. Every sentence below in the present tense
-describes the backend, which is real. The form is the piece still on the old path.
+**BOTH PATHS ARE LIVE, and the old one is the fallback rather than the ex-path.** With
+JavaScript the form posts to the Edge Function and the scan starts on submit. Without it, or if
+that request never reaches the network, the plain FormSubmit POST still happens and the
+maintainer still gets the email. A migration that can take the form down is a migration that
+will, so this one cannot.
+
+A REFUSAL IS NOT A FAILURE and is never retried down the old path. Falling through to
+FormSubmit on a 429 would post around the daily cap, which is the one thing standing between a
+public form and a bill. Only a network error falls back.
 
 What the gatekeeper does, in order: verifies the Turnstile captcha, enforces a global daily cap
 and a per-IP cap, serves a cached scan for a domain seen in the last week, writes a
