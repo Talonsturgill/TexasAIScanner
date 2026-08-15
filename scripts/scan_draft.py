@@ -19,11 +19,19 @@ WHAT IT GUARDS ON THE WAY OUT
 
   UNTRUSTED INPUT. The requester's own name, company and message came from a stranger through a
   public form, and the scan HTML was built from a stranger's website. Everything interpolated
-  here is escaped. Free text from the form is NEVER echoed into the body at all: it is for the
-  maintainer to read in the queue, not for the machine to reflect back.
+  here is escaped, and the company name is CLEANED before it reaches the subject as well as the
+  body, because a subject line is a header and a scraped name can carry a newline. Free text from
+  the form is NEVER echoed into the body at all: it is for the maintainer to read in the queue,
+  not for the machine to reflect back.
 
   ONE ADDRESS. The draft is addressed to the address that asked, and to nothing else. No cc, no
   bcc, no list, no second recipient, ever.
+
+  A FRAGMENT, NOT A DOCUMENT. Phase 6 renders a complete standalone page and Phase 7 hands it
+  here, so the report arrives as `<!doctype html><html><head>...`. Dropping that into a div
+  nests a whole document inside an email body, which is not html any client agrees on: the
+  wrapper tags and the title get stripped or, worse, surface as a stray line above the report.
+  The report is unwrapped to its body and its stylesheet is carried across with it.
 
   build a draft payload:
     scan_draft.py --scan out/scan.json --html out/scan.html --to owner@example.com \\
@@ -52,7 +60,8 @@ section on what other operators published is marked as theirs rather than a pred
 
 The parts that say you don't need AI yet are the honest ones and they are there on purpose.
 
-If any of it is worth a closer look, say so and we can talk about what a Field Study would cover.
+If any of it is worth a closer look, say so. The next step is a conversation about what a Field
+Study would cover.
 """
 
 
@@ -67,6 +76,37 @@ def valid_email(s: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", s))
 
 
+def clean_name(raw) -> str:
+    """The company name off a stranger's website, made fit for a HEADER.
+
+    `valid_email` refuses a CR or an LF in the address and says why: a permissive pattern there
+    is how a header injection or a second recipient gets in. The subject was taking the same
+    class of string from a LESS trusted place, since the requester typed the address and an agent
+    read the company name off a page, and it was interpolated raw.
+    """
+    s = "".join(" " if c in "\r\n\t" else c for c in str(raw or ""))
+    s = "".join(c for c in s if c.isprintable())
+    s = " ".join(s.split())
+    return s[:120].strip()
+
+
+def report_fragment(scan_html: str) -> str:
+    """Unwrap a rendered report page down to what belongs inside an email body.
+
+    Keeps the stylesheet, drops the doctype, the html/head/body wrapper and the title. A string
+    that is already a fragment comes back untouched, so a caller passing a snippet still works.
+    """
+    doc = scan_html or ""
+    body = re.search(r"<body[^>]*>(.*)</body\s*>", doc, flags=re.S | re.I)
+    if not body:
+        return doc
+    # only from the head, so a style block already inside the body is not carried twice
+    head = doc[:body.start()]
+    css = "".join(m.group(0) for m in re.finditer(r"<style[^>]*>.*?</style\s*>", head,
+                                                  flags=re.S | re.I))
+    return css + body.group(1)
+
+
 def build_draft(scan: dict, scan_html: str, to: str) -> dict:
     """The draft payload. `to` is the ONE address that asked for this."""
     if not valid_email(to):
@@ -75,7 +115,7 @@ def build_draft(scan: dict, scan_html: str, to: str) -> dict:
             f"form, so it is checked strictly rather than trusted.")
 
     meta = scan.get("meta") or {}
-    company = str(meta.get("company") or meta.get("domain") or "your operation")
+    company = clean_name(meta.get("company")) or clean_name(meta.get("domain")) or "your operation"
 
     body = (
         "<div style=\"font:16px/1.6 Georgia,serif;color:#141020\">"
@@ -84,7 +124,7 @@ def build_draft(scan: dict, scan_html: str, to: str) -> dict:
         + "".join(f"<p>{html.escape(p)}</p>"
                   for p in NOTE.format(company=company).split("\n\n") if p.strip())
         + "<hr style=\"border:0;border-top:1px solid #ccc;margin:1.4rem 0\">"
-        + scan_html
+        + report_fragment(scan_html)
         + "</div>"
     )
     return {
@@ -133,17 +173,71 @@ def self_test() -> int:
     ok("a company name from a scanned site is escaped in the body",
        "&lt;script&gt;" in d2["body_html"] and eviltag not in d2["body_html"])
 
+    # THE SUBJECT IS A HEADER, and the name in it came off a page rather than out of the form
+    d3 = build_draft({"meta": {"company": "Acme\r\nBcc: harvest@evil.co"}}, "<p>x</p>",
+                     "owner@example.com")
+    ok("a newline in a scraped company name never reaches the subject",
+       "\r" not in d3["subject"] and "\n" not in d3["subject"])
+    ok("...and the name still reads as itself", "Acme Bcc: harvest@evil.co" in d3["subject"])
+    ok("an absurd scraped name is capped rather than carried",
+       len(build_draft({"meta": {"company": "A" * 400}}, "<p>x</p>",
+                       "owner@example.com")["subject"]) < 200)
+    ok("a name that is only whitespace falls through to the honest default",
+       "your operation" in build_draft({"meta": {"company": "   "}}, "<p>x</p>",
+                                       "owner@example.com")["subject"])
+
+    # THE REAL INPUT. Phase 6 renders a whole page and Phase 7 hands it straight to this file,
+    # so the fixture is a whole page. Testing a fragment here is what hid the defect.
+    page = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            '<title>Llano Fluid · Texas AI Docket</title>'
+            '<style>\n.ob { border-left:3px solid var(--c); }\n</style></head>'
+            '<body><div class="wrap"><h2>What the scan saw</h2><p>the report</p></div>'
+            '</body></html>')
+    d4 = build_draft(scan, page, "owner@example.com")["body_html"]
+    ok("a rendered page is unwrapped, never nested whole inside the email body",
+       all(t not in d4.lower() for t in ["<!doctype", "<html", "<head", "<title", "<body"]))
+    ok("...and the title text does not leak in as a stray line", "Texas AI Docket" not in d4)
+    ok("...while the report itself survives intact",
+       "the report" in d4 and "What the scan saw" in d4)
+    ok("...and so does its stylesheet, which carries the whole look",
+       "border-left:3px solid var(--c)" in d4)
+    ok("a caller passing a plain fragment still gets it through untouched",
+       "<p>the report</p>" in build_draft(scan, "<p>the report</p>",
+                                          "owner@example.com")["body_html"])
+
+    # NO FIRST PERSON in the note this file writes, per the house rule
+    person = sorted(set(re.findall(r"\b(?:we|we're|our|ours|us|I|I'm|my|mine)\b",
+                                   NOTE + SUBJECT, flags=re.I)))
+    ok(f"the cover note carries no first person (found {person or 'none'})", not person)
+
     # THE ABSENCE OF A SEND PATH, proved by reading this file with the prose removed.
+    #
+    # IT MUST READ THE WHOLE FILE EXCEPT THIS FUNCTION. The banned tokens are named right here,
+    # so the scan has to skip the checklist or it reports the guard as the violation. Cutting at
+    # `def self_test` did that and threw away everything after it too, which is `main()`: the one
+    # function in the file that opens files, takes an address and would be where a send got
+    # wired. A planted `smtplib.SMTP(...).send_message(...)` in main() passed this gate green.
     src = Path(__file__).read_text(encoding="utf-8")
-    # Only the OPERATIONAL half. The banned tokens are named in this function, so scanning the
-    # whole file finds its own checklist and reports the guard as the violation.
-    src = src.split("def self_test")[0]
-    code = re.sub(r'""".*?"""', "", src, flags=re.S)          # docstrings
+    # Cut out exactly THIS function, from its def to the next top-level statement, and scan
+    # everything else. Cutting at `def self_test` and stopping there was the bug.
+    scanned = re.sub(r"^def self_test\b.*?(?=^\S|\Z)", "", src, flags=re.S | re.M)
+    code = re.sub(r'""".*?"""', "", scanned, flags=re.S)       # docstrings
     code = re.sub(r"#.*", "", code)                            # comments
+
     banned = ["smtplib", "sendmail", "send_message", "requests.post", "urlopen",
               "http.client", "def send", "SMTP"]
-    hits = [b for b in banned if b in code]
+
+    def send_paths(text: str) -> list[str]:
+        return [b for b in banned if b in text]
+
+    ok("the scan reaches main(), which is where a send would actually be wired",
+       "def main" in code and "out.write_text" in code)
+    ok("...and it still skips this function's own checklist", "banned = [" not in code)
+    hits = send_paths(code)
     ok(f"there is NO send path in this file (found {hits or 'none'})", not hits)
+    # A GATE THAT CANNOT FAIL PROVES NOTHING about what it guards.
+    ok("...and the check goes red when a send path is planted",
+       send_paths("x = smtplib.SMTP('h').send_message(p)") == ["smtplib", "send_message", "SMTP"])
 
     print(f"\nscan_draft self-test: {'all passed' if not fails else f'{fails} FAILED'}")
     return 1 if fails else 0
@@ -165,6 +259,8 @@ def main() -> int:
         return 2
     try:
         scan = json.loads(Path(a.scan).read_text(encoding="utf-8"))
+        if not isinstance(scan, dict):
+            raise ValueError(f"{a.scan} is not a scan object")
         page = Path(a.html).read_text(encoding="utf-8")
         payload = build_draft(scan, page, a.to)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
