@@ -7,9 +7,15 @@ A business asks for a look at its own public footprint, and gets back an honest 
 would carry real load, where ordinary software does it cheaper, and where it has no business at
 all, plus what operators in the same industry have already published about trying it.
 
-**No database, no server, no send.** The form posts to FormSubmit, the routine runs the scan
-locally, and the report goes into a Gmail draft that a human presses send on. `CLAUDE.md` carries
-the reasoning for all three.
+**A database and one gatekeeper. Still no send.** The form posts to a Supabase Edge Function
+that verifies the captcha, enforces a daily and a per-IP cap, and fires the scan routine. The
+routine runs the scan and the report goes into a Gmail draft that a human presses send on.
+`CLAUDE.md` carries the reasoning.
+
+This used to say "no database, no server, no send", and the first two stopped being true on
+2026-08-15. The reason is in CLAUDE.md under THE INTAKE PATH: a mailbox is a fine queue for a
+human and a poor one for a machine, and firing the routine on submit needs something that can
+hold an API key without shipping it to the browser.
 
 ## Try the renderer offline
 
