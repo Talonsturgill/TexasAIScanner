@@ -25,12 +25,22 @@ counting. **You default to REJECT.** Read `knowledge/AI_SCOPING_LADDER.md`,
 4. **THE HONEST NO.** At least one observation is `rules_first` or `not_ai`, and the
    `where_not_to_use_ai` line is real and specific rather than a humble-brag. All-`would_help`
    is a reject.
-5. **NO HERO NUMBERS, NO PROMISES.** `labor_framing` is a range with its assumption stated. Any
-   lone dollar figure, or any promised outcome, is a finding.
+5. **NO HERO NUMBERS, NO PROMISES, AND NO TYPED ARITHMETIC.** `labor_framing` is either a
+   string with NO quantity in it at all, or the object form carrying what was observed plus a
+   stated `assumption`. A derived figure sitting in a string is a model having done the
+   arithmetic, which is the one thing the compute-not-generate law forbids, so it is a finding
+   even when it happens to be right. Any lone dollar figure, or any promised outcome, is a
+   finding. **A numeral anywhere in the scanner's own copy about the requester** (the headline,
+   an operation name, a human check, `where_not_to_use_ai`, `limits`, `next_step`) is a finding
+   unless it also stands in a quoted source. A figure inside `signal.quote` is evidence and it
+   is fine.
 6. **OWN-FACTS-ONLY IN THE OBSERVATIONS.** Nothing beyond the requester's own public facts. The
    ONLY place another business may appear is the industry section, under rules 9 and 10.
 7. **VOICE.** No em or en dashes, no emojis, straight quotes, ranges written "X to Y", never
-   "cannot", no sentence opening with "And" or "But". The headline carries no colon.
+   "cannot", no sentence opening with "And" or "But", **and no first person: no "we", no "our",
+   no "us".** The headline carries no colon and nothing carries a semicolon. A verbatim quote
+   from the requester's own site is never touched, so their "we call back within the hour" is
+   evidence and not a violation.
 8. **THIN CHECK.** If fewer than three observations survive with real sources, this scan can't
    honestly stand: return `degrade`. **The industry section never counts toward the three.** A
    scan cannot stand on other people's case studies.

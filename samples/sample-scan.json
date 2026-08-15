@@ -15,7 +15,13 @@
       },
       "tag": "would_help",
       "lowest_tier": "workflow",
-      "labor_framing": "If the office keys 60 to 120 tickets a week at 3 to 5 minutes each, that is roughly 3 to 10 hours a week of retyping, on the stated assumption that a ticket takes one pass.",
+      "labor_framing": {
+        "actor": "the office keys",
+        "volume": { "low": 60, "high": 120, "unit": "tickets", "per": "a week" },
+        "minutes_each": { "low": 3, "high": 5 },
+        "of_what": "retyping",
+        "assumption": "a ticket takes one pass"
+      },
       "human_check": "The office manager approves every extracted ticket before it reaches billing, the same review that happens now."
     },
     {

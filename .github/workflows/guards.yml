@@ -46,7 +46,22 @@ jobs:
       # which is what the second half of this job is for.
 
       - name: Domain rule self-test (one business, typed any way, is one key)
+        # It also fails LOUD rather than empty. `example.com/x?u=https://evil.com` used to
+        # return an empty string with exit 0, and everything downstream keys on this output.
         run: python3 scripts/normalize_domain.py --self-test
+
+      - name: Labor arithmetic self-test (the only arithmetic in the scanner)
+        # The compute-not-generate law, given a mechanism. `labor_framing` was a free string,
+        # so a multiplication and a division were carried out by a language model and typed
+        # into JSON. The model supplies what it observed and never the answer.
+        run: python3 scripts/labor_math.py --self-test
+
+      - name: Ledger self-test (the thirty day window, and domains and dates only)
+        # The no-repeat shipped with its shape defined nowhere and a model told to record the
+        # domain and today's date. Two runs writing two spellings of the keys makes the earlier
+        # entry invisible to the later check, and the window switches itself off with nothing
+        # going red.
+        run: python3 scripts/scanned_ledger.py --self-test
 
       - name: Renderer self-test (an unsourced observation is dropped, not warned about)
         run: python3 scripts/build_scan_page.py --self-test

@@ -119,6 +119,18 @@ def guard_no_send_path(root: Path) -> list[str]:
                 if name in BANNED_CALLS:
                     bad.append(f"{rel}:{node.lineno} calls {name}(), which delivers something")
 
+        # THE NAME HEURISTIC IS MODULE LEVEL ONLY, and the mechanism checks above are not.
+        #
+        # An import or a delivery call is scanned anywhere in the tree, including inside a
+        # function, because that is where the CAPABILITY lives. A name is different: it is a
+        # hint, not a mechanism, and walking the whole tree with it flagged `send_paths()`, a
+        # helper nested inside scan_draft's self-test whose entire job is FINDING send paths.
+        # A gate that reports the checker as the violation is how a gate gets switched off,
+        # and it is the same "a mention is not a call" lesson GUARD 4 already learned.
+        #
+        # An operational send path is a module-level function. Scaffolding nested inside a test
+        # is not, and it cannot smuggle in capability anyway, since the import ban is tree-wide.
+        for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if node.name == "send" or node.name.startswith("send_"):
                     bad.append(f"{rel}:{node.lineno} defines {node.name}(), and nothing here sends")
@@ -488,6 +500,23 @@ def self_test() -> int:
         sneaky.write_text("from urllib.parse import urlparse\nurlparse('x')\n", encoding="utf-8")
         ok("GUARD 1 allows urllib.parse, because parsing a url is not fetching one",
            not guard_no_send_path(root))
+
+        # THE NAME HEURISTIC IS MODULE LEVEL, THE MECHANISM CHECKS ARE NOT. Both halves of
+        # that are asserted, because narrowing a rule without pinning what it still catches is
+        # how a gate quietly stops being one.
+        sneaky.write_text("def self_test():\n"
+                          "    def send_paths(t):\n"
+                          "        return [b for b in ['smtplib'] if b in t]\n"
+                          "    return send_paths('x')\n", encoding="utf-8")
+        ok("GUARD 1 leaves a detector nested in a self-test alone, checker is not violation",
+           not guard_no_send_path(root))
+        sneaky.write_text("def send_report(x):\n    return x\n", encoding="utf-8")
+        ok("...and STILL catches a module-level send_*, which is where a real one would live",
+           bool(guard_no_send_path(root)))
+        sneaky.write_text("def self_test():\n    import smtplib\n    return smtplib\n",
+                          encoding="utf-8")
+        ok("...and an import is caught wherever it hides, including inside a test",
+           bool(guard_no_send_path(root)))
         sneaky.unlink()
 
         # GUARD 2
