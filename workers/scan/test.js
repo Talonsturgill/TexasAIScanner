@@ -275,7 +275,25 @@ head("G. the door");
   ok("an unset captcha secret refuses rather than waving everyone through",
     noSecret.status === 403, String(noSecret.status));
 
+  // THE REFUSAL SAYS WHICH REFUSAL IT IS, to the operator and not to the requester. A widget
+  // showing Success while the server refuses is one sentence covering four different bugs, and
+  // telling them apart by hand cost an hour.
+  const said = [];
+  const realWarn = console.warn;
+  console.warn = (m) => said.push(String(m));
+  globalThis.fetch = async (url) => String(url).includes("turnstile")
+    ? new Response(JSON.stringify({ success: false, "error-codes": ["invalid-input-secret"] }),
+                   { status: 200 })
+    : new Response("ok");
+  const wrong = await handleRequest(req({ url: "other.com", turnstile_token: "t" }), env, NOW);
+  console.warn = realWarn;
+  ok("a captcha refusal names its cause in the log",
+    said.some((m) => m.includes("invalid-input-secret")), said.join(" | ") || "nothing logged");
+  ok("...and the requester is told none of it",
+    !JSON.stringify(await wrong.json()).includes("invalid-input-secret"));
+
   globalThis.fetch = realFetch;
+
 }
 {
   const db = d1();

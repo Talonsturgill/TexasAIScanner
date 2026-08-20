@@ -54,7 +54,14 @@ const num = (v, d) => {
 // exact failure nobody notices until they are being drained. The only way to run without one is
 // to say so out loud in the environment, and that is a deliberate, visible choice.
 export async function turnstileOk(secret, token, ip, required) {
-  if (!secret) return !required;
+  if (!secret) {
+    // Says which of the two silences this is, because they need different fixes and the
+    // requester sees the same sentence either way.
+    console.warn(required
+      ? "turnstile: TURNSTILE_SECRET is unset and the captcha is required, so every request is refused"
+      : "turnstile: TURNSTILE_SECRET is unset and CAPTCHA_REQUIRED is false, so the captcha is skipped");
+    return !required;
+  }
   const form = new FormData();
   form.append("secret", secret);
   form.append("response", token || "");
@@ -62,7 +69,24 @@ export async function turnstileOk(secret, token, ip, required) {
   const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify",
     { method: "POST", body: form });
   const d = await r.json().catch(() => ({ success: false }));
-  return d.success === true;
+  if (d.success === true) return true;
+
+  // WHY THE CODES ARE LOGGED. Cloudflare tells you exactly which of four different things went
+  // wrong, and this used to throw all of it away and say "captcha failed" to everybody. A
+  // widget that says Success on the page and a server that refuses it is the same sentence
+  // whether the secret is missing, belongs to another widget, or the token was already spent,
+  // and those need three different fixes. An hour went into guessing between them.
+  //
+  //   missing-input-secret     nothing is set
+  //   invalid-input-secret     set, but not the secret paired with the site key on the page
+  //   invalid-input-response   the token is malformed
+  //   timeout-or-duplicate     the token was already used, or is older than five minutes
+  //
+  // LOGGED, NEVER RETURNED. A stranger at a public form learns nothing about how this is
+  // configured; the operator reads it in the live log stream.
+  const codes = Array.isArray(d["error-codes"]) ? d["error-codes"] : [];
+  console.warn("turnstile refused: " + (codes.join(", ") || "no error code given"));
+  return false;
 }
 
 // Constant time for a shared secret, and it refuses an unset one rather than accidentally
