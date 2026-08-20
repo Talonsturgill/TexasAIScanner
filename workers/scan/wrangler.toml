@@ -23,7 +23,10 @@ compatibility_date = "2026-08-01"
 [[d1_databases]]
 binding = "SCAN_DB"
 database_name = "texas-scan"
-database_id = "PLACEHOLDER_FILLED_BY_DEPLOY_SH"
+# Created 2026-08-20 in ENAM, with read replication OFF. That is not a default worth
+# changing: replicas serve stale reads, and the watch page polls a feed three seconds
+# after the routine writes it.
+database_id = "3f20a8f7-6cf8-4de7-a514-fc739dae27e3"
 
 [vars]
 # Plain values, deliberately not secrets: a cap is an operational number and reading it off

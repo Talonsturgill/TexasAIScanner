@@ -364,7 +364,11 @@ made in the dashboard, because a terminal and a local checkout is a fine ask for
 poor one for a Chromebook. The report is still built locally by the routine, and `scan_draft.py`
 still puts it in a Gmail draft for a human to send.
 
-1. Create a D1 database, paste `db/d1_schema.sql` into its console. It is idempotent.
+1. ~~Create a D1 database, paste `db/d1_schema.sql` into its console.~~ DONE 2026-08-20:
+   `texas-scan`, `3f20a8f7-6cf8-4de7-a514-fc739dae27e3`, in ENAM with read replication
+   off. The id is pinned in `workers/scan/wrangler.toml`, so nothing needs creating and
+   a second database is the wrong answer if something looks unbound. The schema is
+   idempotent, so re-running it is safe.
 2. Create a Worker from `workers/scan/bundled.js`, which is generated and never hand edited:
    run `node workers/scan/bundle.mjs`, and `workers/scan/test.js` fails if it is stale.
 3. Bind the database to the Worker as **`SCAN_DB`**.
