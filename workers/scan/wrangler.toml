@@ -1,0 +1,35 @@
+# The scan worker, for whoever has a terminal.
+#
+# TWO DEPLOY PATHS EXIST ON PURPOSE and neither is the fallback. `bundled.js` is one pasteable
+# file for the Cloudflare dashboard, because a terminal and a local checkout is a fine ask for
+# a laptop and a poor one for a Chromebook. This is the other path: it does the same thing
+# without clicking, and it is what `deploy.sh` drives.
+#
+# The two cannot drift, because both are generated from the same two modules and the worker's
+# test suite fails if `bundled.js` is stale.
+#
+# NOTHING SECRET IS IN THIS FILE. `database_id` is an identifier, not a credential, and the
+# four real secrets are set with `wrangler secret put`, which reads them from stdin so they
+# never land in a file, a shell history, or a transcript.
+
+name = "texas-scan"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+# The name matters. The docket's site_build.py points at
+# https://texas-scan.talon-sturgill.workers.dev, so renaming this means editing SCAN_WORKER
+# there in the same change.
+
+[[d1_databases]]
+binding = "SCAN_DB"
+database_name = "texas-scan"
+database_id = "PLACEHOLDER_FILLED_BY_DEPLOY_SH"
+
+[vars]
+# Plain values, deliberately not secrets: a cap is an operational number and reading it off
+# somebody's shoulder tells them nothing they could not learn by submitting the form twice.
+DAILY_CAP = "25"
+IP_CAP = "2"
+CACHE_HOURS = "168"
+CAPTCHA_REQUIRED = "true"
+SCAN_ORIGIN = "https://texasaidocket.com"
