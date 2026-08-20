@@ -65,13 +65,32 @@ BANNED_IMPORTS = {
 # Called names that deliver something, whatever the receiver is.
 BANNED_CALLS = {"sendmail", "send_message", "urlopen", "popen", "system"}
 
-# THE ONE EXEMPTION, and it is deliberately shaped so it cannot grow quietly. It is keyed by
-# (file, module) rather than by file, so this file is still held to every other ban, and GUARD 1
-# additionally proves that the only thing this file hands a subprocess is git.
+# THE EXEMPTIONS, deliberately shaped so they cannot grow quietly. Each is keyed by
+# (file, module) rather than by file, so the file is still held to every other ban, and GUARD 1
+# additionally proves a property of each that makes the exemption safe rather than trusted.
+#
+# THE SECOND ONE WAS A DECISION, made 2026-08-20 on the owner's call, and it is the harder of
+# the two to justify, so here is the justification. The law is that this routine drafts and a
+# human sends: there is no credential here that can mail anybody. `scan_progress.py` holds a
+# credential, and what that credential can do is append one line to one scan row. It cannot
+# mail, it cannot read the table, and it cannot reach anything the operator has not configured.
+#
+# The reason `urllib.request` is banned at all is that an HTTP opener is general purpose, which
+# the ban's own words call "a send path wearing a fetch's coat". That is a fair worry, and the
+# compensating check below is the answer to it: the exempted file is proved to hold NO url of
+# its own. Its endpoint comes from the environment and nowhere else, so the hosts it can reach
+# are the hosts the operator chose, and an edit that types a mail API's address into it fails.
 EXEMPT = {
     ("scripts/repo_guards.py", "subprocess"):
         "reads the git index to know what is tracked. Every call is checked to be git.",
+    ("scripts/scan_progress.py", "urllib"):
+        "appends one line to one scan row so the requester can watch. It holds no url of its "
+        "own, which is checked, so it reaches only what the environment configures.",
 }
+
+# The one delivery call the one exempted file must make. Same shape and same reasoning as
+# EXEMPT: named, not counted, and the file is still held to every other ban.
+EXEMPT_CALLS = {("scripts/scan_progress.py", "urlopen")}
 
 
 def _module_is_banned(mod: str) -> str | None:
@@ -116,7 +135,10 @@ def guard_no_send_path(root: Path) -> list[str]:
             if isinstance(node, ast.Call):
                 name = (node.func.attr if isinstance(node.func, ast.Attribute)
                         else node.func.id if isinstance(node.func, ast.Name) else "")
-                if name in BANNED_CALLS:
+                # The exempted appender necessarily calls the opener it is exempted for.
+                # Keyed by (file, call), so every other file and every other call in this one
+                # is still held to the ban.
+                if name in BANNED_CALLS and (rel, name) not in EXEMPT_CALLS:
                     bad.append(f"{rel}:{node.lineno} calls {name}(), which delivers something")
 
         # THE NAME HEURISTIC IS MODULE LEVEL ONLY, and the mechanism checks above are not.
@@ -135,10 +157,28 @@ def guard_no_send_path(root: Path) -> list[str]:
                 if node.name == "send" or node.name.startswith("send_"):
                     bad.append(f"{rel}:{node.lineno} defines {node.name}(), and nothing here sends")
 
-    # The exemption is only safe while it stays one line and only reaches git.
-    if len(EXEMPT) != 1:
-        bad.append(f"EXEMPT holds {len(EXEMPT)} entries. It is allowed exactly one, and growing "
-                   f"it is how the one law in this repo stops being a law.")
+    # THE EXEMPTIONS ARE NAMED, NOT COUNTED. This asserted a count of one, which is a tripwire
+    # against quiet growth and was the right instinct; a number is the wrong way to spell it,
+    # because the next person raises the number. Naming them means a new exemption has to be
+    # written into this list, in this file, where somebody reads it.
+    ALLOWED = {("scripts/repo_guards.py", "subprocess"),
+               ("scripts/scan_progress.py", "urllib")}
+    for key in sorted(set(EXEMPT) - ALLOWED):
+        bad.append(f"EXEMPT holds {key}, which is not one of the exemptions this guard knows "
+                   f"about. Growing it quietly is how the one law in this repo stops being one.")
+
+    # AND THE SECOND EXEMPTION IS ONLY SAFE WHILE IT HOLDS NO URL OF ITS OWN. Its endpoint comes
+    # from the environment, so the hosts it can reach are the ones the operator configured. A
+    # url typed into that file is a host nobody chose, and it fails here.
+    prog = root / "scripts" / "scan_progress.py"
+    if prog.is_file():
+        ptree = ast.parse(prog.read_text(encoding="utf-8"), filename="scripts/scan_progress.py")
+        for node in ast.walk(ptree):
+            if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and re.search(r"https?://", node.value)):
+                bad.append(f"scripts/scan_progress.py:{node.lineno} holds a url of its own. Its "
+                           f"endpoint comes from the environment, which is what makes its "
+                           f"exemption from the send-path ban safe.")
     guard = root / "scripts" / "repo_guards.py"
     if guard.is_file():
         tree = ast.parse(guard.read_text(encoding="utf-8"), filename="scripts/repo_guards.py")
