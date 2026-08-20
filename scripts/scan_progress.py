@@ -47,6 +47,15 @@ ENDPOINT = os.environ.get("SCAN_PROGRESS_URL", "")
 SECRET = os.environ.get("SCAN_PROGRESS_SECRET", "")
 
 NOTE_MAX = 300
+
+# CLOUDFLARE REFUSES A CLIENT THAT WILL NOT NAME ITSELF, and urllib names itself
+# "Python-urllib/3.x". The worker sits behind Cloudflare, which answered every feed call with a
+# 403 and error 1010, a browser-signature block, so a live run narrated itself to nobody while
+# the helper reported the outage to stderr and carried on exactly as designed. The report was
+# never at risk and the feed was never delivered, which is the failure mode the swallowing makes
+# quiet. One honest header fixes it.
+USER_AGENT = "texas-ai-scanner-routine/1.0"
+
 _warned = False
 
 
@@ -63,7 +72,8 @@ def _post(payload: dict, timeout: float = 6.0) -> bool:
         ENDPOINT,
         data=json.dumps(payload).encode("utf-8"),
         headers={"content-type": "application/json",
-                 "authorization": f"Bearer {SECRET}"},
+                 "authorization": f"Bearer {SECRET}",
+                 "user-agent": USER_AGENT},
         method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -134,6 +144,50 @@ def self_test() -> int:
               and sent[-1]["degraded"] is True)
     finally:
         globals()["_post"] = real
+
+    # THE REQUEST ITSELF, which the fake above never sees. A helper that swallows its own errors
+    # cannot tell you it has been refused at the door for six months, so the one call that
+    # actually reaches the network is checked here rather than trusted.
+    class _Resp:
+        status = 200
+
+        def read(self):
+            return b'{"ok": true}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    caught: list = []
+
+    def fake_urlopen(req, timeout=6.0):
+        caught.append(req)
+        return _Resp()
+
+    real_urlopen = urllib.request.urlopen
+    urllib.request.urlopen = fake_urlopen
+    # THE TEST ENDPOINT CARRIES NO http SCHEME ON PURPOSE. `repo_guards` GUARD 3 fails this file
+    # on any url literal in it, and it is right to: this file is exempt from the send-path ban
+    # only because its endpoint comes from the environment, so a host typed in here is a host
+    # nobody configured. Splitting the string to slip past that check would be evading the guard
+    # rather than satisfying it. `Request` only needs a scheme, and urlopen is stubbed anyway.
+    ENDPOINT, SECRET = "x-scan-test://feed/progress", "s3cret"
+    try:
+        landed = line("id-1", "footprint", "Read the services page.")
+    finally:
+        urllib.request.urlopen = real_urlopen
+    check("a configured call reaches the network and reports that it landed", landed)
+    sent_req = caught[-1] if caught else None
+    ua = sent_req.get_header("User-agent") if sent_req else ""
+    # THE DEFECT THIS REPLAYS. urllib names itself "Python-urllib/3.x", Cloudflare answers a
+    # client with that signature 403 error 1010, and the feed went dark with nothing going red.
+    check("the call NAMES ITSELF, because Cloudflare blocks a client that does not",
+          bool(ua) and "urllib" not in ua.lower(), repr(ua))
+    check("...and it still carries the bearer token and its json",
+          bool(sent_req) and sent_req.get_header("Authorization") == "Bearer s3cret"
+          and sent_req.get_header("Content-type") == "application/json")
 
     # UNCONFIGURED IS A NO-OP, NOT A CRASH. The routine must survive a missing secret, because
     # the alternative is a scan that dies for want of narration.
