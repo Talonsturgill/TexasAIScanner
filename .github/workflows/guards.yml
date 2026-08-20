@@ -39,6 +39,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      # PINNED, and not left to whatever the image ships. The worker's suite runs against
+      # node:sqlite, which arrived in 22.5 and is absent before it. An unpinned runtime here
+      # means the day the runner image moves is the day the backend stops being tested, and
+      # the failure would read as "cannot find module" rather than as what it is.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       # ------------------------------------------------------------ the checkers work
       #
       # These prove each gate CAN GO RED. They reintroduce known-bad input and require the
@@ -71,6 +79,18 @@ jobs:
 
       - name: Repo guards self-test (every law below, proved able to fail)
         run: python3 scripts/repo_guards.py --self-test
+
+      # THE BACKEND IS JAVASCRIPT NOW, so the suite grew a runtime. The worker replaced a
+      # Supabase project on 2026-08-20 and the whole gatekeeper lives in workers/scan/: the
+      # caps, the captcha, the token, the safe shape a stranger's browser is served.
+      #
+      # It runs against a REAL SQLite loaded from the REAL schema file, not a stub, because a
+      # stub proves the code calls the functions the stub implements and nothing else. Whether
+      # db/d1_schema.sql applies at all, whether json_array_length sees the feed, whether an
+      # update guarded on a row's state actually declines: a fake answers none of those, and
+      # would happily pass over a schema that does not parse.
+      - name: The scan worker, against real SQLite and the real schema
+        run: node workers/scan/test.js
 
       # ------------------------------------------------------------ and this repo is clean
       #

@@ -60,22 +60,44 @@ absolute. `knowledge/PRIVACY_WALL.md` is the enforced checklist.
   scan result and never a lead. `out/` is gitignored and a scan artifact never leaves it.
 - The per-scan lead draft is INTERNAL, addressed only to the maintainer.
 
-## THERE IS NO DATABASE, AND THAT IS THE DESIGN (owner's call, 2026-08-14)
+## THE STORAGE QUESTION, ANSWERED THREE TIMES (current answer: 2026-08-20)
 
-The Alaska scanner runs on Supabase: a `scanner` schema, four Edge Functions, RLS, unguessable
-result tokens, and a shared project with a private `leadflow` machine. Texas keeps none of it.
-**The result is EMAILED to the requester and stored nowhere.**
+This section said **THERE IS NO DATABASE, AND THAT IS THE DESIGN** from 2026-08-14 until
+2026-08-20, and the code stopped obeying it on the 15th. It is rewritten rather than patched,
+because the reasoning is worth keeping and a doctrine the code ignores is worse than no
+doctrine: a reader trusts it, and it is a lie.
 
-**Why not Supabase.** The owner does not want the dependency, and once the storage question is
-asked honestly the rest of it falls away. Most of Alaska's wall exists to fence a public entry
-point away from private prospect data in a shared database. Texas has no leadflow and no shared
-database, so that entire class of risk is deleted rather than defended.
+**14th, no database.** The Alaska scanner runs on Supabase with a shared `leadflow` machine
+beside it, and most of its wall exists to fence a public entry point away from private prospect
+data in that shared project. Texas has neither, so that class of risk could be deleted rather
+than defended. The result would be emailed and stored nowhere.
 
-**Why not GitHub either, which is the more important half.** GitHub Pages is wholly public, so
-a scan kept in the repo is published to the world. That is not ours to do. The report describes
-a named business's operations, and they asked us to send it to them, not to post it. An
-unguessable URL does not change that, because anyone can browse a public repo and read every
-scan in it.
+**15th, a database.** The form got a second path, because a mailbox is a fine queue for a person
+and a poor one for a machine, and firing the routine on submit needs something server-side. That
+brought a Supabase project with it, and this section was not updated. It stood contradicted for
+five days.
+
+**20th, still storage, different vendor.** The owner asked for a live progress view, which
+cannot exist without somewhere to put the feed, and then said plainly of Supabase: "I hate the
+dependency its flaky, lets get this done without supabase". Both are satisfied by moving to a
+**Cloudflare Worker and a D1 database**, which is `workers/scan/` and `db/d1_schema.sql`.
+
+**Why Cloudflare rather than another Postgres.** It already serves the domain, Turnstile and the
+ask box's worker, so this is one vendor instead of two, and the ask worker had already written
+the argument: it "adds a file rather than a vendor". Not KV, which needs no schema but takes up
+to sixty seconds to propagate a write, and the watch page polls every three: eventually
+consistent storage turns a live view into a view that lies. Not Durable Objects, which fit best
+on the merits but need wrangler, and this project deploys a worker by pasting one bundled file
+into the dashboard.
+
+**What did not change is the half that matters.** The report is still a DELIVERY and not a page.
+
+**Not GitHub, and this half never wavered.** GitHub Pages is wholly public, so a scan kept in
+the repo is published to the world. That is not ours to do. The report describes a named
+business's operations and they asked us to send it to them, not to post it. An unguessable URL
+would not fix it, because anyone can browse a public repo and read every scan in it. No scan
+result and no requester detail is ever written to git, and that is why the record lives in a
+database the site cannot serve rather than in a file the site publishes.
 
 If a requester later WANTS their result public, that is a fine thing and it is their call to
 make, not a default we take for them.
@@ -90,18 +112,25 @@ fences, the domain cache, and the public API that spends money on demand. The ab
 shrinks to almost nothing, because there is no public endpoint firing agents. The privacy
 problem is gone because nothing is published.
 
-The cost is honest and worth stating: **there is no instant self-serve result page.** A
-requester does not type a domain and watch a page build in ninety seconds. They ask, and the
-report arrives. At the volume a consulting front door actually sees, that is the right trade,
-and it can be revisited if the volume ever argues otherwise.
+That last paragraph used to end "there is no instant self-serve result page", and that is the
+line the 20th revisited exactly as it invited. There is now a page that watches the run, at
+`/scan/watch/?t=<token>` in the docket repo, and what it shows is the run reporting itself. What
+it still does NOT show is the report: the html lands on the row and the delivery is a human
+gated draft, same as it ever was.
 
 ### What the wall becomes
 
-Fences 1, 2, 2b, 3 and 8 port unchanged and still govern. Fence 5 (anon sees nothing) and fence
-6 (nothing prospecty in git) are now true BY CONSTRUCTION rather than by configuration, which is
-strictly stronger: there is no database to misconfigure and no result to leak. Fences 4 and 7
-(the `in_pipeline` flag and the cross-schema opt-in) are retired, because there is no other
-schema. This paragraph is their record, so a future reader does not go looking for them.
+Fences 1, 2, 2b, 3 and 8 port unchanged and still govern. Fences 4 and 7 (the `in_pipeline`
+flag and the cross-schema opt-in) are retired, because there is no other schema. This paragraph
+is their record, so a future reader does not go looking for them.
+
+Fence 5 (anon sees nothing) held in Postgres through RLS with no policies, which is a
+CONFIGURATION and could be turned off by one migration. On D1 it holds by construction: nothing
+but the worker has a binding, there is no anon key and no query endpoint, and `workers/scan/db.js`
+is the complete list of questions anybody can ask the record. Every one is a literal statement
+with bound parameters, and `getByToken` names the four fields that may leave a row, so the free
+text, the address and the request ip stay on it. That is checked, in `workers/scan/test.js`,
+against a real SQLite loaded from the real schema.
 
 ### The intake path
 
@@ -112,9 +141,17 @@ it changed matters more than the change.
 
 A mailbox is a fine queue for a person and a poor one for a machine. Firing the routine the
 moment somebody submits needs something that can hold an Anthropic API key and call the routines
-fire endpoint, and a key cannot live in a static page. So the intake now matches the sibling
-scanner's: **the form posts to the `scan-request` Edge Function**, which is the only thing the
-public talks to.
+fire endpoint, and a key cannot live in a static page. So the form posts to a gatekeeper, which
+is the only thing the public talks to. **REVISED AGAIN 2026-08-20**: that gatekeeper is now
+`POST /request` on the scan Worker rather than a Supabase Edge Function. Same job, same order,
+same refusals; a different machine holds the secret.
+
+**IT FIRES A ROUTINE, NOT THE API.** Worth stating plainly because the gatekeeper holds an
+Anthropic credential and that is easy to misread. The call is the routines fire endpoint,
+`POST .../routines/<id>/fire` with the `experimental-cc-routine` beta header, which runs the
+scan as a routine on the owner's subscription. Nothing in this repo bills per token. Do not
+"simplify" this into a Messages API call: it would work, and it would move the cost of every
+public form submission onto a meter.
 
 **BOTH PATHS ARE LIVE, and the old one is the fallback rather than the ex-path.** With
 JavaScript the form posts to the Edge Function and the scan starts on submit. Without it, or if
@@ -127,9 +164,10 @@ FormSubmit on a 429 would post around the daily cap, which is the one thing stan
 public form and a bill. Only a network error falls back.
 
 What the gatekeeper does, in order: verifies the Turnstile captcha, enforces a global daily cap
-and a per-IP cap, serves a cached scan for a domain seen in the last week, writes a
-`scanner.scans` row, and fires the routine with a Bearer token it holds server-side.
-`scan-result` hands one scan back by its unguessable token and nothing else.
+and a per-IP cap, serves a cached scan for a domain seen in the last week, writes a `scans` row,
+and fires the routine with a Bearer token it holds server-side. `POST /result` hands one scan
+back by its unguessable token and nothing else, and `POST /progress` is the routine's only way
+to write.
 
 What did NOT change, and is the part that matters: **nothing sends.** The routine still writes
 the finished report into a Gmail draft addressed to the requester and a human presses send.
@@ -321,18 +359,25 @@ python3 scripts/repo_guards.py || echo "RED: the repo itself"
 The six self-tests prove the checkers can go red. The last line is the half that says anything
 about THIS repo, and it is the one that catches what no single file can see.
 
-DEPLOYING. The page is static. The backend is the Supabase project `texas-ai-scanner`
-(`fbcxboktppalytugeqin`): `db/schema.sql` is the schema as applied, and `supabase/functions/`
-holds the two Edge Functions as deployed. The report is still built locally by the routine, and
-`scan_draft.py` still puts it in a Gmail draft for a human to send.
+DEPLOYING. The page is static. The backend is one Cloudflare Worker and one D1 database, both
+made in the dashboard, because a terminal and a local checkout is a fine ask for a laptop and a
+poor one for a Chromebook. The report is still built locally by the routine, and `scan_draft.py`
+still puts it in a Gmail draft for a human to send.
 
-Four values live in `scanner.config` and nowhere else. None of them belongs in this repo:
+1. Create a D1 database, paste `db/d1_schema.sql` into its console. It is idempotent.
+2. Create a Worker from `workers/scan/bundled.js`, which is generated and never hand edited:
+   run `node workers/scan/bundle.mjs`, and `workers/scan/test.js` fails if it is stale.
+3. Bind the database to the Worker as **`SCAN_DB`**.
+4. Set four secrets. None of them belongs in this repo:
 
-    insert into scanner.config (key, value) values
-      ('trigger_url',      'https://.../routines/<routine id>/fire'),
-      ('trigger_secret',   '<the Anthropic API key>'),
-      ('turnstile_secret', '<the Cloudflare Turnstile secret>')
-    on conflict (key) do update set value = excluded.value, updated_at = now();
+       TRIGGER_URL        https://.../routines/<routine id>/fire
+       TRIGGER_SECRET     the credential that fires the ROUTINE, see above
+       TURNSTILE_SECRET   the Cloudflare Turnstile secret
+       PROGRESS_SECRET    the append-only secret the routine holds
 
-`daily_cap`, `ip_cap`, `cache_hours` and `captcha_required` are already seeded. Changing a cap is
-one update and no redeploy, which is the whole reason config is a table.
+5. Optional vars, which are plain and not secret: `DAILY_CAP` (25), `IP_CAP` (2),
+   `CACHE_HOURS` (168), `CAPTCHA_REQUIRED` (true), `SCAN_ORIGIN`.
+
+`PROGRESS_SECRET` is the one the routine carries, and it is deliberately the weakest thing here:
+it appends a line to a scan whose uuid the caller already holds, and reads nothing. The routine
+fetches pages a stranger named, so what it carries is chosen on the assumption that it leaks.

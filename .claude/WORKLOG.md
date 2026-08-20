@@ -1,91 +1,113 @@
-# WORKLOG — the live progress view
+# WORKLOG — off Supabase, onto the Worker that already runs
 
-Opened 2026-08-20 on the owner's call: "yeah build the live progress view".
+Opened 2026-08-20 on the owner's call: "I hate the supabase dependency its flaky,
+lets get this done without supabase, like the whole thing".
 
 **Read this first.** Resume from the task table at the bottom.
 
-## What the copy promised and what the product does
+## What Supabase is actually doing
 
-The homepage scanner section says a research team goes to work when you press it.
-It deliberately does NOT say you can watch, because you can't. The owner asked for
-the version where you can.
+Seven things, and every one of them has to keep working:
 
-## The finding, measured before any code
-
-The backend for this **already exists and is deployed**. It was built and never
-connected.
-
-| piece | state | evidence |
+| # | what | where it lives today |
 | --- | --- | --- |
-| `scanner.scans.progress` jsonb | built | `db/schema.sql`, commented "served by token while the scan runs so the requester can watch" |
-| `public_token` | built | 128 bits of `gen_random_bytes`, the credential |
-| `scan-request` edge function | DEPLOYED | `OPTIONS` returns 200 |
-| `scan-result` edge function | DEPLOYED | `OPTIONS` returns 200 |
-| published form calls it | **NO** | posts to `formsubmit.co`, so no row and no token ever exists |
-| routine appends progress | **NO** | zero mentions of `progress`, `public_token`, `supabase` in `prompts/` or `scripts/` |
-| a page that watches | **NO** | does not exist |
+| 1 | hold a scan row for days, so a shared link still opens | `scanner.scans` |
+| 2 | rate limit: a global daily cap and a per IP 24 hour cap | `scanner_today_count`, `scanner_ip_count` |
+| 3 | serve a cached scan for a domain seen recently | `scanner_cached` |
+| 4 | hold config: trigger url, trigger secret, turnstile secret, caps | `scanner.config` |
+| 5 | serve ONE scan by its unguessable token | `scanner_get_by_token` |
+| 6 | append the progress feed, mark running, mark done | `002_progress.sql` |
+| 7 | set the notify address once, never overwrite | `scanner_set_notify` |
 
-`scan-request` validates the domain, verifies Turnstile, enforces per-IP and daily
-caps, serves a cached scan for a recently seen domain, creates the row, and fires
-the routine's API trigger with a secret it holds server-side. It returns
-`{token, status, cached}`. `scan-result` takes the token and returns status,
-headline, the progress feed, and the html once finished.
+Plus three Deno functions in front of them, and a service role key.
 
-So the work is wiring, a routine that reports itself, and a page. Not a backend.
+**Nothing has to be migrated.** The published form has never successfully created
+a row, `scanner.scans` holds nothing worth keeping, and the token space is
+unguessable so no link outside points at one. This is a replacement, not a move.
 
-## What only the owner can answer
+## The decision, and why it is not really a choice
 
-1. **Is `trigger_url` / `trigger_secret` set** in `scanner.config`? Without it
-   `scan-request` returns "scanner not fully configured" and the row is marked
-   failed. Cannot be checked from here: the config RPC is service-role only.
-2. **Is Turnstile configured** (`turnstile_secret`, and a site key for the form)?
-   `captcha_required` defaults on.
-3. **Switching the form away from FormSubmit changes the delivery story.** Today
-   every request lands in the maintainer's mailbox and a person reads it. The DB
-   path fires an automated trigger instead. `scanner_sync_check` in the docket repo
-   enforces the field names, the hidden `_subject`/`_captcha` values and five
-   written promises against a pinned vendored copy; that contract has to move with
-   it, deliberately, not by accident.
+**One Cloudflare Worker at `workers/scan/`, one D1 database.** Everything above
+lands there and Supabase goes away entirely.
 
-## The shape
+The argument was already written in this project, in
+`texasaidocket/workers/ask/worker.js`, about the ask box's own backend:
 
-    form -> scan-request -> row + token -> routine trigger
-                                             |
-                                    routine appends progress per phase
-                                             |
-    /scan/watch/?t=<token> -> polls scan-result -> renders the feed
+> WHY A WORKER AND NOT A SERVER. It holds two secrets and forwards one call.
+> There is no schema to migrate, no project to pause and no row that can go
+> stale. Cloudflare already serves the domain and Turnstile, so this adds a file
+> rather than a vendor.
+
+That is the same argument. The scan flow is the case it was never applied to.
+
+**Why not KV**, which the ask worker already has bound and which needs no schema
+at all: KV takes up to sixty seconds to propagate a write. The watch page polls
+every three. A live feed on eventually consistent storage is a feed that lies,
+and watching a run while it runs is the whole feature.
+
+**Why not Durable Objects**, which would be the best fit on the merits: they need
+a class migration through wrangler, and this project deploys a worker by pasting
+ONE bundled file into the Cloudflare dashboard. `workers/ask/bundle.mjs` exists
+for exactly that reason and says so: a terminal and a local checkout is "a fine
+ask for a laptop and a poor one for a Chromebook". A design the owner cannot
+deploy is not a design.
+
+**Why D1**: strongly consistent, created and queried from the dashboard, bound to
+a worker from the dashboard, same vendor that already serves the domain and
+Turnstile and the ask worker. One vendor instead of two, and the schema is one
+paste into a console the owner already uses for exactly this.
+
+What this costs, honestly: it is still a schema. The complaint was flakiness and
+a second vendor, not the existence of a table, and a scan token that has to
+survive for days needs durable state somewhere. Anything that claims otherwise
+is proposing to lose scans.
+
+## The shape after
+
+    form -> POST worker /request -> row + token -> fires the routine trigger
+                                                     |
+                                        routine POSTs /progress per line
+                                                     |
+    /scan/watch/?t=<token> -> polls worker /result -> renders the feed
+
+Four routes, one worker, one binding. `scan_progress.py` does not change at all:
+it reads its endpoint from the environment and is proved to hold no url of its
+own, which is exactly what makes it repointable.
+
+## What only the owner can do
+
+1. Create a D1 database in the Cloudflare dashboard, paste `db/d1_schema.sql`
+   into its console.
+2. Create the Worker from `workers/scan/bundled.js`, bind the D1 database as
+   `SCAN_DB`, set the secrets: `TRIGGER_URL`, `TRIGGER_SECRET`,
+   `TURNSTILE_SECRET`, `PROGRESS_SECRET`.
+3. Point `SCAN_PROGRESS_URL` and `SCAN_PROGRESS_SECRET` at it in the routine's
+   environment.
+4. Delete the Supabase project once the new path has run once.
 
 ## Tasks
 
 | # | task | repo | state |
 | --- | --- | --- | --- |
-| A | Measure what exists, probe the endpoints | scanner | DONE |
+| A | Measure what Supabase does, decide the replacement | scanner | DONE |
 | B | This worklog | scanner | DONE |
-| C | Watch page, polling `scan-result`, stub-tested | docket | DONE |
-| C2 | The write side: `002_progress.sql` + `scan-progress` function | scanner | DONE, owner must apply + deploy |
-| D | `scan_progress.py` helper the routine calls per phase | scanner | DONE |
-| E | Routine phases updated to report themselves | scanner | DONE |
-| F | Form switched to `scan-request` + Turnstile | docket | TODO, unblocked 2026-08-20 |
-| G | `scanner_sync_check` contract updated to match | docket | BLOCKED on F |
-
-The owner answered Q1 and Q2 on 2026-08-20: trigger url, trigger secret and
-Turnstile are all set, and the form reuses the site key already on the site. So F
-is unblocked and it is the one that changes a written promise.
-
-## What only the owner can do, for C2
-
-Nothing here reaches Supabase: there is no project credential in this session and
-no MCP tool for it. The write path ships as source and lands when the owner runs
-two commands.
-
-1. Apply `db/migrations/002_progress.sql` to the project. It adds
-   `scanner_progress`, `scanner_mark_running` and `scanner_mark_done`.
-2. Deploy `supabase/functions/scan-progress`, and set its `PROGRESS_SECRET`.
-3. Set `SCAN_PROGRESS_URL` and `SCAN_PROGRESS_SECRET` in the routine's
-   environment, or `progress_secret` in `scanner.config`.
-
-Until then `scan_progress.py` declines quietly and the run is exactly what it was.
+| C | `db/d1_schema.sql`, the whole record in one file | scanner | DONE |
+| D | `workers/scan/` worker + bundler + tests | scanner | DONE, 79 checks |
+| E | Delete `supabase/`, `db/schema.sql`, `db/migrations/` | scanner | DONE |
+| F | `repo_guards`, README, `CLAUDE.md`, guards.yml | scanner | DONE |
+| G | Docket repoints both constants and hands back the watch link | docket | TODO |
+| H | `scanner_sync_check` contract moves with it | docket | TODO |
 
 ## Wrap
 
 W1. Delete this file when every task is DONE.
+
+## Found on the way, and worth a reader's time
+
+`CLAUDE.md` carried a section headed **THERE IS NO DATABASE, AND THAT IS THE DESIGN (owner's
+call, 2026-08-14)**, and the code stopped obeying it on the 15th when the form got its
+gatekeeper. It stood contradicted for five days. Rewritten as a dated three-part record rather
+than patched, because a doctrine the code ignores is worse than none: a reader trusts it.
+
+The privacy half of it never wavered and is kept: the report is a DELIVERY and not a page,
+nothing about a requester goes in git, and GitHub Pages being wholly public is why.

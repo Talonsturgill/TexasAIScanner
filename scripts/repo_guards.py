@@ -92,6 +92,18 @@ EXEMPT = {
 # EXEMPT: named, not counted, and the file is still held to every other ban.
 EXEMPT_CALLS = {("scripts/scan_progress.py", "urlopen")}
 
+# Hosts the scan worker is allowed to write into its own source. Everything else it talks to
+# arrives through the environment. `challenges.cloudflare.com` is the captcha verifier and is
+# here because a configurable captcha verifier is not a captcha. `texasaidocket.com` is the
+# default CORS origin and is never fetched, which is why it is a default rather than a secret.
+WORKER_HOSTS = {"challenges.cloudflare.com", "texasaidocket.com"}
+
+# A quoted string in JavaScript, and a url inside one. Deliberately reading STRINGS rather than
+# stripping comments: a comment stripper that meets `https://` truncates on the slashes, which
+# is how a scanner for urls ends up blind to urls.
+_JS_STRING = re.compile(r"""["'`]([^"'`\n]*)["'`]""")
+_URL_IN_STRING = re.compile(r"""https?://[^\s"'`]+""")
+
 
 def _module_is_banned(mod: str) -> str | None:
     for banned, why in BANNED_IMPORTS.items():
@@ -179,6 +191,29 @@ def guard_no_send_path(root: Path) -> list[str]:
                 bad.append(f"scripts/scan_progress.py:{node.lineno} holds a url of its own. Its "
                            f"endpoint comes from the environment, which is what makes its "
                            f"exemption from the send-path ban safe.")
+    # THE WORKER IS NOT PYTHON AND THE BAN ABOVE CANNOT SEE IT. `workers/scan/` is the public
+    # gatekeeper and its whole job is to make HTTP calls, so banning fetch there is meaningless.
+    # The law that IS meaningful is the same one the appender is held to: it may reach what the
+    # operator configured, and nothing it typed itself.
+    #
+    # So every url written into the worker's own source is named here. The trigger, the database
+    # and the origin all arrive through the environment; the only host in the file is
+    # Cloudflare's captcha verifier, which cannot be configurable because the captcha is the
+    # thing being verified. A url appearing here that is not in this set is a host nobody chose,
+    # and the whole point of a gatekeeper is that it is the one thing that decides.
+    for name in ("db.js", "worker.js", "bundled.js"):
+        wf = root / "workers" / "scan" / name
+        if not wf.is_file():
+            continue
+        rel = f"workers/scan/{name}"
+        src = wf.read_text(encoding="utf-8")
+        for lit in re.findall(_JS_STRING, src):
+            for url in re.findall(_URL_IN_STRING, lit):
+                host = url.split("/")[2] if len(url.split("/")) > 2 else url
+                if host not in WORKER_HOSTS:
+                    bad.append(f"{rel} reaches {host}, which is not a host this worker is "
+                               f"allowed to name. Its trigger comes from the environment.")
+
     guard = root / "scripts" / "repo_guards.py"
     if guard.is_file():
         tree = ast.parse(guard.read_text(encoding="utf-8"), filename="scripts/repo_guards.py")
