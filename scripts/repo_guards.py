@@ -17,6 +17,7 @@ that only exist between files.
   GUARD 4  everything built here is wired to something
   GUARD 5  the promise on the form and the run contract still agree
   GUARD 6  the published surfaces keep the house voice
+  GUARD 7  the no-repeat record outlives the run that writes it
 
 WHY AN AST AND NOT A GREP. `scan_draft.py` proves its own innocence by reading its source with
 the prose stripped out, which works, and which forced a carve-out: the banned words are NAMED in
@@ -489,6 +490,43 @@ def guard_house_voice(root: Path) -> list[str]:
 
 # --------------------------------------------------------------------------- runner
 
+# --------------------------------------------------------------------------- GUARD 7
+
+def guard_the_ledger_outlives_the_run(root: Path) -> list[str]:
+    """GUARD 7. A record the run throws away is not a record.
+
+    Phase 7 tells a run to write `ledger/scanned.json` with `scanned_ledger.py --record`, and
+    Phase 0 reads it back to refuse a repeat inside the thirty day window. Between those two
+    facts sits an assumption nobody wrote down: that the file is still there next time.
+
+    It was not. The run happens in a container that is reclaimed when it ends, the routine had
+    no step that committed anything, and on `main` this ledger has never held a single entry.
+    Every scan since the repo was created answered "clear to scan" from an empty file, including
+    for domains scanned days before. The no-repeat was off from the day it was written, and the
+    thing that makes that worth a guard rather than a fix is that NOTHING WENT RED. The check
+    ran, exited 0, and was believed.
+
+    So the two halves are pinned together. A contract that tells a run to record something must
+    also tell it to persist that record, in the same phase, or the record is a local variable
+    with a filename.
+    """
+    routine = root / "prompts" / "scan_routine.md"
+    if not routine.is_file():
+        return ["prompts/scan_routine.md must exist to be checked"]
+    r = routine.read_text(encoding="utf-8")
+    if "scanned_ledger.py --record" not in r:
+        # Nothing is recorded, so there is nothing to persist and this guard has no opinion.
+        return []
+    bad = []
+    if "git add ledger/scanned.json" not in r:
+        bad.append("the run contract records the scan but never stages the ledger, so the "
+                   "record dies with the container and the no-repeat is off")
+    if "git push" not in r:
+        bad.append("the run contract writes the ledger but never pushes it, so the next run "
+                   "reads an empty file and rescans a domain it already paid for")
+    return bad
+
+
 GUARDS = [
     ("no send path anywhere", guard_no_send_path),
     ("nothing about a requester in git", guard_nothing_about_a_requester_in_git),
@@ -496,6 +534,7 @@ GUARDS = [
     ("everything is wired", guard_everything_is_wired),
     ("the promise and the routine agree", guard_promise_and_routine_agree),
     ("the published surfaces keep the house voice", guard_house_voice),
+    ("the no-repeat record outlives the run", guard_the_ledger_outlives_the_run),
 ]
 
 
@@ -519,7 +558,10 @@ def _fixture(tmp: Path) -> Path:
               ".claude/agents"):
         (root / d).mkdir(parents=True, exist_ok=True)
     here = Path(__file__).resolve().parent
-    for name in ("normalize_domain.py", "build_scan_page.py", "repo_guards.py"):
+    # `scanned_ledger.py` joins them because the fixture's contract now names it, and GUARD 4
+    # is right to refuse a contract that points at a file which is not there.
+    for name in ("normalize_domain.py", "build_scan_page.py", "repo_guards.py",
+                 "scanned_ledger.py"):
         (root / "scripts" / name).write_text((here / name).read_text(encoding="utf-8"),
                                              encoding="utf-8")
     (root / ".gitignore").write_text("out/\n", encoding="utf-8")
@@ -534,10 +576,17 @@ def _fixture(tmp: Path) -> Path:
         "<p>One report to one address. No list, no follow-up sequence, no second email. "
         "Every line traces to a page on your own site. "
         "A person reads every report before it goes out.</p>", encoding="utf-8")
+    # THE FIXTURE CARRIES THE RECORD-AND-PERSIST PAIR, because GUARD 7 is about those two lines
+    # and a fixture without them lets every one of its cases pass by having nothing to break.
+    # That is not hypothetical: the first version of this fixture omitted them, and three GUARD 7
+    # cases went green against a prompt the guard had no opinion about.
     (root / "prompts" / "scan_routine.md").write_text(
         "Draft to the address they typed. There is no follow-up sequence. Do not send it. "
         "It cites every claim. Spawn scan-critic. Run scripts/normalize_domain.py, "
-        "scripts/build_scan_page.py and scripts/repo_guards.py.\n", encoding="utf-8")
+        "scripts/build_scan_page.py and scripts/repo_guards.py.\n"
+        "Then python3 scripts/scanned_ledger.py --record <the normalised domain>\n"
+        "git add ledger/scanned.json\n"
+        "git push\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
     return root
@@ -665,6 +714,26 @@ def self_test() -> int:
            bool(guard_promise_and_routine_agree(root)))
         p.write_text(p.read_text(encoding="utf-8").replace("Send it.", "Do not send it."),
                      encoding="utf-8")
+
+        # GUARD 7. Both halves, and the vacuous case, because a guard that only fires when
+        # somebody deletes a whole phase is a guard that never fires.
+        rbase = p.read_text(encoding="utf-8")
+        p.write_text(rbase.replace("git add ledger/scanned.json", "cp ledger/scanned.json /tmp"),
+                     encoding="utf-8")
+        ok("GUARD 7 catches a record that is written and never staged",
+           bool(guard_the_ledger_outlives_the_run(root)))
+        p.write_text(rbase.replace("git push", "git status"), encoding="utf-8")
+        ok("GUARD 7 catches a record that is committed and never pushed",
+           bool(guard_the_ledger_outlives_the_run(root)))
+        # AND IT HOLDS ITS PEACE WHEN THERE IS NOTHING TO PERSIST, which is the half that keeps
+        # it honest. A contract that records nothing is not failing this law, it is outside it.
+        p.write_text(rbase.replace("scanned_ledger.py --record", "scanned_ledger.py --check"),
+                     encoding="utf-8")
+        ok("GUARD 7 says nothing when the contract records nothing",
+           not guard_the_ledger_outlives_the_run(root))
+        p.write_text(rbase, encoding="utf-8")
+        ok("GUARD 7 holds on a contract that records and persists",
+           not guard_the_ledger_outlives_the_run(root))
 
         # GUARD 6
         base = f.read_text(encoding="utf-8")

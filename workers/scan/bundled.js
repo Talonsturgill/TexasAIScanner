@@ -256,7 +256,17 @@ function changed(r) {
 //   POST /notify    set the delivery address, once, never overwritten.
 
 const DEFAULT_ORIGIN = "https://texasaidocket.com";
-const DEFAULTS = { daily_cap: 25, ip_cap: 2, cache_hours: 168 };
+// THE DOMAIN WINDOW IS THIRTY DAYS, WHICH IS WHAT THE DOCS ALWAYS SAID IT WAS.
+// It sat at 168 hours, seven days, while CLAUDE.md and the run contract both promised that a
+// domain is not rescanned inside thirty. The gap was paid for in real money: a domain scanned
+// on the 1st could fire a whole second routine run on the 9th and nothing refused it.
+//
+// This is the check that actually prevents the spend, because it runs BEFORE the routine is
+// fired. The ledger check inside the routine runs after the container is already up.
+// The two behave differently on purpose and that is not drift. This one SERVES THE EARLIER
+// REPORT, which is a better answer for the requester than a refusal. The routine's own check
+// REFUSES, because by the time it runs there is nothing cached to hand back.
+const DEFAULTS = { daily_cap: 25, ip_cap: 2, cache_hours: 720 };
 
 // Read from the environment rather than hardcoded, the same lesson the ask worker learned when
 // the site moved off a github.io subpath and a hardcoded origin would have needed a redeploy.

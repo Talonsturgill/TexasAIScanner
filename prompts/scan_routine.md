@@ -204,6 +204,27 @@ itself off with nothing going red. The script also refuses any key other than `d
 `date`, which is the privacy wall holding on the one file a run actually writes: not the
 company, not the email, not a finding.
 
+**THEN PUSH IT, IN THE SAME STEP, BECAUSE THIS RUN IS EPHEMERAL.**
+
+```
+git add ledger/scanned.json
+git diff --cached --quiet || git commit -m "scanned: <the normalised domain>"
+git push
+```
+
+Until 2026-08-25 this phase ended at the line above and the ledger was written to a container
+that is reclaimed when the run finishes. The record died with it every single time. On `main`,
+`ledger/scanned.json` has never held one entry, so Phase 0 step 2 has been reading an empty file
+back and answering "clear to scan" to every domain that ever asked, including one it had scanned
+days earlier. **The no-repeat was off from the day it was written and nothing went red**, which
+is exactly the failure its own warning above describes and did not survive.
+
+**If the push fails, say so to the maintainer in the run output, loudly, and do not swallow it.**
+A finished report is still worth delivering, so a failed push does not discard the scan. But a
+scan that cannot record itself is a scan with its no-repeat switched off, and the maintainer
+needs that on the day rather than on a bill. `repo_guards` GUARD 7 pins this step to the
+`--record` line above so the two cannot be separated again.
+
 ---
 
 ## PHASE 8 — WHAT NOT TO DO NEXT
