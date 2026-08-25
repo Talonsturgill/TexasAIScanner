@@ -220,21 +220,45 @@ There is no public endpoint that fires agents, which is most of this problem sol
 having the thing. A scan costs money and runs research, so the trigger is a request that a
 maintainer or a scheduled routine picks up, never a URL a stranger can hammer.
 
-What remains: the form carries a honeypot field and FormSubmit's own abuse handling, the
-routine refuses more than one scan per domain per thirty days (`ledger/scanned.json`, which
-holds domains and dates and nothing about the business), and a run that can't fetch the site
-degrades honestly rather than retrying forever.
+What remains, and **the order matters because only the first one prevents a spend**:
 
-**Both of those are mechanisms now, not intentions.** The scan form keeps FormSubmit's captcha
-ON, deliberately diverging from the docket's services form, which switches it off. A services
-enquiry costs a maintainer the seconds it takes to read. A scan request is an item in a queue
-that costs money and runs research when it is picked up, and the honeypot alone stops only a bot
-careless enough to fill a field it can't see. The thirty day window is enforced by
-`scripts/scanned_ledger.py`, which does the date arithmetic, pins the record shape, and refuses
-any key other than `domain` and `date`. **Nothing hand-edits that ledger.** It was a free-form
-file that a model appended to in whatever shape it chose, and a second spelling of the keys
-makes an earlier entry invisible to the next check, which switches the no-repeat off with
-nothing going red.
+1. **The worker's domain window, thirty days, in D1.** It runs on the request, before the
+   routine is fired, and hands back the earlier report rather than paying for a new one. This is
+   the ceiling that actually holds.
+2. **The routine's own no-repeat**, `ledger/scanned.json`, domains and dates and nothing about
+   the business. It covers a run fired by hand rather than through the form, which the worker
+   never sees. It runs after the container is already up, so it saves the research and not the
+   startup.
+3. The honeypot field and FormSubmit's own abuse handling, and a run that can't fetch the site
+   degrades honestly rather than retrying forever.
+
+**BOTH WINDOWS WERE WRONG UNTIL 2026-08-25, in different ways, and the record of it belongs
+here.** The worker's was set to 168 hours while every document promised thirty days, so a paid
+rescan on day eight was allowed by the only thing that could have refused it. The routine's was
+worse: Phase 7 wrote the ledger into a container that is reclaimed when the run ends and no
+phase ever committed it, so on `main` that file has never held a single entry and Phase 0 has
+answered "clear to scan" to every domain that ever asked. **A guard reading a file nothing
+persists is not a weak guard, it is a green light with a guard's name on it.** `repo_guards`
+GUARD 7 now pins the record step to the push step so they cannot be separated again.
+
+**These are mechanisms now, not intentions**, and that claim was false for the no-repeat half
+from the day it was written until 2026-08-25. It is worth saying twice because it is the exact
+shape of every fault this repo has had. A rule written down, a checker built for it, and no
+mechanism carrying the checker's answer to the next run.
+
+The scan form keeps FormSubmit's captcha ON, deliberately diverging from the docket's services
+form, which switches it off. A services enquiry costs a maintainer the seconds it takes to read.
+A scan request is an item in a queue that costs money and runs research when it is picked up,
+and the honeypot alone stops only a bot careless enough to fill a field it can't see.
+
+**The thirty day window is enforced in two places and they are not interchangeable.** The
+worker's `CACHE_HOURS` is the one that stops the spend, because it answers before the routine is
+fired. `scripts/scanned_ledger.py` is the routine's own, for a run that never went through the
+worker: it does the date arithmetic, pins the record shape, and refuses any key other than
+`domain` and `date`. **Nothing hand-edits that ledger.** It was a free-form file that a model
+appended to in whatever shape it chose, and a second spelling of the keys makes an earlier entry
+invisible to the next check, which switches the no-repeat off with nothing going red. A record
+that is never pushed does the same thing by a different route, which is GUARD 7.
 
 ## VOICE
 
@@ -380,7 +404,10 @@ still puts it in a Gmail draft for a human to send.
        PROGRESS_SECRET    the append-only secret the routine holds
 
 5. Optional vars, which are plain and not secret: `DAILY_CAP` (25), `IP_CAP` (2),
-   `CACHE_HOURS` (168), `CAPTCHA_REQUIRED` (true), `SCAN_ORIGIN`.
+   `CACHE_HOURS` (720, which is the thirty days the rest of this file promises),
+   `CAPTCHA_REQUIRED` (true), `SCAN_ORIGIN`. **If this worker was deployed with `CACHE_HOURS`
+   set in the dashboard, the variable wins over the new default and has to be changed there
+   too.**
 
 `PROGRESS_SECRET` is the one the routine carries, and it is deliberately the weakest thing here:
 it appends a line to a scan whose uuid the caller already holds, and reads nothing. The routine
