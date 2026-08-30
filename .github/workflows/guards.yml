@@ -77,6 +77,11 @@ jobs:
       - name: Draft builder self-test (one address, escaped input, and no send path)
         run: python3 scripts/scan_draft.py --self-test
 
+      - name: Progress client self-test (the live request names itself)
+        # The helper is allowed to swallow a feed outage so the report can still finish. That
+        # makes the outgoing Request the only place the Cloudflare 1010 regression can be caught.
+        run: python3 scripts/scan_progress.py --self-test
+
       - name: Repo guards self-test (every law below, proved able to fail)
         run: python3 scripts/repo_guards.py --self-test
 

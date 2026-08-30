@@ -33,6 +33,6 @@ database_id = "3f20a8f7-6cf8-4de7-a514-fc739dae27e3"
 # somebody's shoulder tells them nothing they could not learn by submitting the form twice.
 DAILY_CAP = "25"
 IP_CAP = "2"
-CACHE_HOURS = "168"
+CACHE_HOURS = "720"
 CAPTCHA_REQUIRED = "true"
 SCAN_ORIGIN = "https://texasaidocket.com"

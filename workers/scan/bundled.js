@@ -411,7 +411,12 @@ export async function handleRequest(request, env, nowMs) {
         ...(env.TRIGGER_SECRET ? { authorization: `Bearer ${env.TRIGGER_SECRET}` } : {}),
       },
       body: JSON.stringify({
-        text: JSON.stringify({ scan_id: row.id, domain, booking_url, jobs_signal }),
+        // The private routine needs the address to build the one Gmail draft the requester
+        // asked for. It never enters an agent prompt or the public result shape. The stranger's
+        // free text remains on the D1 row for the maintainer and does not ride this payload.
+        text: JSON.stringify({
+          scan_id: row.id, domain, booking_url, jobs_signal, notify_email,
+        }),
       }),
     });
     if (!r.ok) throw new Error(`trigger ${r.status}`);
