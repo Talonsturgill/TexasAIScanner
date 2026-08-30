@@ -234,7 +234,7 @@ head("G. the door");
   };
 
   const r1 = await handleRequest(req({ url: "https://WWW.Example.com/x", note: "a secret note",
-    turnstile_token: "t" }), env, NOW);
+    notify_email: "requester@example.com", turnstile_token: "t" }), env, NOW);
   const b1 = await r1.json();
   ok("a good request is accepted and handed a token", r1.status === 200 && /^[0-9a-f]{32}$/.test(b1.token),
     JSON.stringify(b1));
@@ -242,8 +242,10 @@ head("G. the door");
   ok("...at the configured trigger and nowhere else", fired[0].url === "https://api.example/fire");
   ok("THE FREE TEXT NEVER RIDES THE TRIGGER, so it cannot reach an agent as instructions",
     !JSON.stringify(fired[0]).includes("a secret note"), JSON.stringify(fired[0].body));
-  ok("the domain in the payload is the normalized one",
-    JSON.parse(fired[0].body.text).domain === "example.com");
+  const trigger = JSON.parse(fired[0].body.text);
+  ok("the domain in the payload is the normalized one", trigger.domain === "example.com");
+  ok("the private routine receives the validated address needed to build its draft",
+    trigger.notify_email === "requester@example.com", JSON.stringify(trigger));
   ok("the reply says where the request stands", b1.status === "queued" && b1.cached === false);
   ok("the browser is told which origin may read this",
     r1.headers.get("access-control-allow-origin") === "https://texasaidocket.com");
@@ -371,6 +373,17 @@ head("H. the file that actually gets deployed");
 
   const mod = await import("./bundled.js");
   ok("...and it is a worker, with a fetch handler", typeof mod.default?.fetch === "function");
+}
+
+// ----------------------------------------------------------- I. deployment-facing settings
+head("I. the deployment configuration agrees with the runtime promise");
+{
+  const worker = readFileSync(join(HERE, "worker.js"), "utf8");
+  const wrangler = readFileSync(join(HERE, "wrangler.toml"), "utf8");
+  ok("the runtime default keeps a domain cached for thirty days",
+    /cache_hours:\s*720\b/.test(worker));
+  ok("wrangler does not override that promise with the old seven day window",
+    /^CACHE_HOURS\s*=\s*["']720["']\s*$/m.test(wrangler));
 }
 
 console.log(`\nscan worker: ${pass} passed, ${fail} failed`);

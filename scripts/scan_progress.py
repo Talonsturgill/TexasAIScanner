@@ -47,6 +47,13 @@ ENDPOINT = os.environ.get("SCAN_PROGRESS_URL", "")
 SECRET = os.environ.get("SCAN_PROGRESS_SECRET", "")
 
 NOTE_MAX = 300
+
+# CLOUDFLARE REFUSES A CLIENT THAT WILL NOT NAME ITSELF. urllib's default User-Agent is
+# "Python-urllib/3.x", which the live Worker answered with 403 error 1010 during the first real
+# scan. The feed is allowed to fail without failing the report, so the request itself needs a
+# test: otherwise this exact outage is silent by design.
+USER_AGENT = "texas-ai-scanner-routine/1.0"
+
 _warned = False
 
 
@@ -63,7 +70,8 @@ def _post(payload: dict, timeout: float = 6.0) -> bool:
         ENDPOINT,
         data=json.dumps(payload).encode("utf-8"),
         headers={"content-type": "application/json",
-                 "authorization": f"Bearer {SECRET}"},
+                 "authorization": f"Bearer {SECRET}",
+                 "user-agent": USER_AGENT},
         method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -134,6 +142,42 @@ def self_test() -> int:
               and sent[-1]["degraded"] is True)
     finally:
         globals()["_post"] = real
+
+    # The payload tests above replace _post, so they cannot see the Request that reaches the
+    # network. This one replaces urlopen instead and inspects that boundary directly.
+    class _Resp:
+        def read(self):
+            return b'{"ok": true}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    caught: list = []
+
+    def fake_urlopen(req, timeout=6.0):
+        caught.append(req)
+        return _Resp()
+
+    real_urlopen = urllib.request.urlopen
+    urllib.request.urlopen = fake_urlopen
+    # No http URL literal belongs in this file. repo_guards relies on the endpoint arriving
+    # through the environment, and Request accepts a custom scheme while urlopen is stubbed.
+    ENDPOINT, SECRET = "x-scan-test://feed/progress", "s3cret"
+    try:
+        landed = line("id-1", "footprint", "Read the services page.")
+    finally:
+        urllib.request.urlopen = real_urlopen
+    check("a configured call reaches the network and reports that it landed", landed)
+    sent_req = caught[-1] if caught else None
+    ua = sent_req.get_header("User-agent") if sent_req else ""
+    check("the call names itself instead of using urllib's blocked signature",
+          bool(ua) and "urllib" not in ua.lower(), repr(ua))
+    check("...and it still carries the bearer token and json content type",
+          bool(sent_req) and sent_req.get_header("Authorization") == "Bearer s3cret"
+          and sent_req.get_header("Content-type") == "application/json")
 
     # UNCONFIGURED IS A NO-OP, NOT A CRASH. The routine must survive a missing secret, because
     # the alternative is a scan that dies for want of narration.

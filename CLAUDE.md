@@ -16,8 +16,8 @@ bends.
 
 **IS.** A bounded, request-triggered routine that runs a shallow front slice of the method
 (footprint research, published industry evidence, the feasibility ladder, an honesty gate) and
-renders one short honest report, which is EMAILED to the requester. Four scan-mode agents. No
-database and no server.
+renders one short honest report into a Gmail draft addressed to the requester. Four scan-mode
+agents. One Cloudflare Worker gates the request and one private D1 database holds its progress.
 
 **IS NOT.** A deep engagement. It never finds a contact, never models full ROI, never sends
 anything to anyone it was not asked to send to. It never writes to the docket repo's ledgers
@@ -54,8 +54,9 @@ absolute. `knowledge/PRIVACY_WALL.md` is the enforced checklist.
   result, never blended into the requester's own facts, and never presented as something the
   requester will get.
 - The scanner **never exposes another company's data** or any other requester's scan. There is
-  nothing to expose: no database, no result page, no public endpoint. A report exists as an
-  email to the one address that asked for it and nowhere else.
+  one token-scoped result route and it returns only the status, progress, headline and finished
+  report for that token. The address, free text, request IP and user agent never enter that
+  public shape.
 - **No requester data is ever written to git.** This repo holds the method and the code, never a
   scan result and never a lead. `out/` is gitignored and a scan artifact never leaves it.
 - The per-scan lead draft is INTERNAL, addressed only to the maintainer.
@@ -107,10 +108,10 @@ to the address they typed, and nothing about them persists anywhere public.
 
 ### What that removes, and what it costs
 
-Removed: the `scanner` schema, all four Edge Functions, RLS, result tokens, the shared-project
-fences, the domain cache, and the public API that spends money on demand. The abuse problem
-shrinks to almost nothing, because there is no public endpoint firing agents. The privacy
-problem is gone because nothing is published.
+Removed: the Supabase `scanner` schema, all four Edge Functions, RLS and the shared-project
+fences. The replacement keeps the domain cache and token-scoped result in one Worker and one D1
+database. The Worker is the public endpoint that fires the routine, so Turnstile, per-IP limits,
+the daily cap and the thirty day cache are load-bearing rather than optional.
 
 That last paragraph used to end "there is no instant self-serve result page", and that is the
 line the 20th revisited exactly as it invited. There is now a page that watches the run, at
@@ -128,9 +129,10 @@ Fence 5 (anon sees nothing) held in Postgres through RLS with no policies, which
 CONFIGURATION and could be turned off by one migration. On D1 it holds by construction: nothing
 but the worker has a binding, there is no anon key and no query endpoint, and `workers/scan/db.js`
 is the complete list of questions anybody can ask the record. Every one is a literal statement
-with bound parameters, and `getByToken` names the four fields that may leave a row, so the free
-text, the address and the request ip stay on it. That is checked, in `workers/scan/test.js`,
-against a real SQLite loaded from the real schema.
+with bound parameters, and `getByToken` names the four fields that may leave a row publicly.
+The free text and request IP stay on the row. The validated address also rides the private
+routine trigger because the routine cannot build the requested draft without it. That is
+checked, in `workers/scan/test.js`, against a real SQLite loaded from the real schema.
 
 ### The intake path
 
@@ -154,7 +156,7 @@ scan as a routine on the owner's subscription. Nothing in this repo bills per to
 public form submission onto a meter.
 
 **BOTH PATHS ARE LIVE, and the old one is the fallback rather than the ex-path.** With
-JavaScript the form posts to the Edge Function and the scan starts on submit. Without it, or if
+JavaScript the form posts to the Worker and the scan starts on submit. Without it, or if
 that request never reaches the network, the plain FormSubmit POST still happens and the
 maintainer still gets the email. A migration that can take the form down is a migration that
 will, so this one cannot.
@@ -164,24 +166,24 @@ FormSubmit on a 429 would post around the daily cap, which is the one thing stan
 public form and a bill. Only a network error falls back.
 
 What the gatekeeper does, in order: verifies the Turnstile captcha, enforces a global daily cap
-and a per-IP cap, serves a cached scan for a domain seen in the last week, writes a `scans` row,
-and fires the routine with a Bearer token it holds server-side. `POST /result` hands one scan
-back by its unguessable token and nothing else, and `POST /progress` is the routine's only way
-to write.
+and a per-IP cap, serves a cached scan for a domain seen in the last thirty days, writes a
+`scans` row, and fires the routine with a Bearer token it holds server-side. `POST /result`
+hands one scan back by its unguessable token and nothing else, and `POST /progress` is the
+routine's only way to write.
 
 What did NOT change, and is the part that matters: **nothing sends.** The routine still writes
 the finished report into a Gmail draft addressed to the requester and a human presses send.
 
 WHAT THE CHANGE COSTS, stated plainly rather than buried. There is now a database holding a
 domain, an IP and a user agent per request, where before there was an email in one mailbox. The
-privacy wall is what keeps that honest: RLS is on with no policies, so the anon key reads
-nothing, every access goes through eight named service-role-only RPCs, and the only shape the
-browser can ever get back is one scan by its own token.
+privacy wall is what keeps that honest: only the Worker has the D1 binding, its SQL uses bound
+parameters, and the only shape the browser can ever get back is one scan by its own token.
 
 CAPS ARE THE THING THAT REPLACED THE HUMAN. When a person pasted each request in, they were the
-ceiling on spend. Auto-firing removes that, so the ceiling is now `daily_cap` and `ip_cap` in
-`scanner.config`, and the captcha FAILS CLOSED: a missing Turnstile secret refuses every request
-rather than waving them through, because the alternative is a failure you notice on a bill.
+ceiling on spend. Auto-firing removes that, so the ceiling is now `DAILY_CAP` and `IP_CAP` in
+the Worker environment, and the captcha FAILS CLOSED: a missing Turnstile secret refuses every
+request rather than waving them through, because the alternative is a failure you notice on a
+bill.
 
 ## HONESTY (the gate and the brand)
 
@@ -216,9 +218,9 @@ be exact as published, and rewriting one to satisfy a gate would be the real dis
 
 ## COST AND ABUSE DISCIPLINE
 
-There is no public endpoint that fires agents, which is most of this problem solved by not
-having the thing. A scan costs money and runs research, so the trigger is a request that a
-maintainer or a scheduled routine picks up, never a URL a stranger can hammer.
+The public Worker fires the routine, which is why the controls before that call are the cost
+boundary. A scan costs money and runs research. Turnstile, the daily and per-IP caps and the
+thirty day domain cache all run before a new row can trigger work.
 
 What remains, and **the order matters because only the first one prevents a spend**:
 
@@ -314,9 +316,9 @@ fit a house rule, because editing a quote to suit our punctuation is falsifying 
   the checks against the committed files, which is the half that says anything about this repo.
 - `web/scan.html` — the public form, served from the docket site at `/scan/`. **A template, not
   a page.** `{FORM_ACTION}` is a required substitution, and served verbatim the form posts to
-  that literal path, 404s, and loses every request with nobody told. Posts to FormSubmit, with
-  the captcha ON, which is the one place it diverges from the services form. No key, no token,
-  no server.
+  that literal path, 404s, and loses every request with nobody told. Its JavaScript path posts
+  to the scan Worker. FormSubmit is the network-failure fallback. The captcha stays ON in both
+  paths, which is the one place it diverges from the services form.
 - `ledger/scanned.json` — domains and dates only, the thirty day no-repeat. Never a business
   fact, never an email. Written by `scanned_ledger.py` and never by hand.
 - `samples/` — a sample `scan.json` for offline rendering. It is also a fixture: the renderer's
